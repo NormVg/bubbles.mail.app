@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "bubbles-mail",
+  "productName": "Bubbles.mail",
   "version": "0.1.0",
-  "identifier": "com.vishnu_mac.bubbles-mail",
+  "identifier": "com.vishnu-mac.bubbles.mail",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:3000",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "bubbles-mail",
+        "title": "Bubbles.mail",
         "width": 800,
         "height": 600
       }

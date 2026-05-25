@@ -1,6 +1,8 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-05-25',
   devtools: { enabled: true },
+  // Use src/ as the Nuxt source directory
+  srcDir: 'src',
   // Use SSG (no SSR) for Tauri
   ssr: false,
   // Makes the Nuxt dev server reachable from other devices (iOS physical devices)
