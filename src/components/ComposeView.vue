@@ -201,7 +201,7 @@ function saveDraft() {
 
         <!-- CC -->
         <Transition name="field-slide">
-          <template v-if="showCc">
+          <div v-if="showCc">
             <div class="field-divider" />
             <div class="field-row chip-row">
               <span class="field-label">Cc</span>
@@ -224,12 +224,12 @@ function saveDraft() {
               </div>
               <button class="cc-toggle-btn close-cc" @click="showCc = false; ccChips = []"><X :size="12" /></button>
             </div>
-          </template>
+          </div>
         </Transition>
 
         <!-- BCC -->
         <Transition name="field-slide">
-          <template v-if="showBcc">
+          <div v-if="showBcc">
             <div class="field-divider" />
             <div class="field-row chip-row">
               <span class="field-label">Bcc</span>
@@ -252,7 +252,7 @@ function saveDraft() {
               </div>
               <button class="cc-toggle-btn close-cc" @click="showBcc = false; bccChips = []"><X :size="12" /></button>
             </div>
-          </template>
+          </div>
         </Transition>
 
         <div class="field-divider" />
