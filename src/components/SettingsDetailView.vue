@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSettings, PersonalityTone } from '../composables/useSettings'
-import { Check, Sparkles, AlertCircle, RefreshCw } from '@lucide/vue'
+import { Check, Sparkles, AlertCircle, RefreshCw, Key, Eye, EyeOff } from '@lucide/vue'
 
 const props = defineProps({
   category: {
@@ -31,6 +31,8 @@ const enableVoiceDictation = ref(settings.value.enableVoiceDictation)
 const agentPersonality = ref<PersonalityTone>(settings.value.agentPersonality)
 const customInstructions = ref(settings.value.customInstructions)
 const syncInterval = ref(settings.value.syncInterval)
+const apiKey = ref(settings.value.apiKey)
+const showApiKey = ref(false)
 
 // Button save indicators
 const isSaving = ref(false)
@@ -47,7 +49,8 @@ function saveAllSettings() {
       enableVoiceDictation: enableVoiceDictation.value,
       agentPersonality: agentPersonality.value,
       customInstructions: customInstructions.value,
-      syncInterval: syncInterval.value
+      syncInterval: syncInterval.value,
+      apiKey: apiKey.value
     })
     isSaving.value = false
     showSuccess.value = true
@@ -194,6 +197,37 @@ function saveAllSettings() {
         <!-- CATEGORY 3: SECURITY & ACCESS -->
         <div v-else-if="category === 'security'" class="settings-section animate-fade-in">
           <h3 class="section-label">Privacy & Access Controls</h3>
+
+          <!-- API Key set card -->
+          <div class="api-key-card">
+            <div class="api-key-header">
+              <div class="api-key-icon-wrapper flex-center">
+                <Key :size="15" />
+              </div>
+              <div>
+                <h4 class="setting-title">Bubbles API Access Token</h4>
+                <p class="setting-subtitle">Set your secure developer token to authorize background AI agents to compile data checklists.</p>
+              </div>
+            </div>
+
+            <div class="api-input-wrapper">
+              <input 
+                :type="showApiKey ? 'text' : 'password'" 
+                v-model="apiKey" 
+                class="api-key-input"
+                placeholder="Enter your bb-live-... key"
+              />
+              <button 
+                type="button" 
+                class="api-toggle-visibility-btn flex-center"
+                @click="showApiKey = !showApiKey"
+              >
+                <EyeOff v-if="showApiKey" :size="14" />
+                <Eye v-else :size="14" />
+              </button>
+            </div>
+          </div>
+
           <div class="setting-row-card static-card">
             <div class="setting-card-left">
               <h4 class="setting-title">Workspace Data Privacy</h4>
@@ -653,5 +687,78 @@ input:checked + .slider:before {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* API Key Card Styles */
+.api-key-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.api-key-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.api-key-icon-wrapper {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.api-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-secondary);
+  padding: 0 4px 0 12px;
+  height: 38px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.api-input-wrapper:focus-within {
+  border-color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+.api-key-input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  height: 100%;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.api-toggle-visibility-btn {
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.api-toggle-visibility-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
 }
 </style>

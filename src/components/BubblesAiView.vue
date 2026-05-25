@@ -341,8 +341,7 @@ onMounted(() => {
   right: 0;
   bottom: 0;
   opacity: 0.85;
-  background-image: url('/deter-bg.png');
-
+  background-image: url('/deter-bg.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

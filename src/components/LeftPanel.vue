@@ -486,13 +486,14 @@ function setSelectedDateKey(date: string) {
 .footer-action-btn {
   background: transparent;
   border: none;
-  padding: 4px;
+  padding: 6px;
+  border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .footer-action-btn:hover {
@@ -502,7 +503,5 @@ function setSelectedDateKey(date: string) {
 .footer-action-btn.active-settings {
   color: var(--text-primary);
   background-color: var(--bg-secondary);
-  border-radius: 6px;
-  padding: 6px;
 }
 </style>
