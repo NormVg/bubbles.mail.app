@@ -268,7 +268,7 @@ const selectedEmailId = ref<string | null>('1') // default select first email
 const searchQuery = ref<string>('')
 const activeCategory = ref<string | null>(null)
 const activeTab = ref<'all' | 'unread'>('all')
-const viewMode = ref<'digest' | 'inbox' | 'chat' | 'settings'>('digest') // 'digest' is default (Bubbles AI)
+const viewMode = ref<'digest' | 'inbox' | 'chat' | 'settings' | 'compose'>('digest') // 'digest' is default (Bubbles AI)
 const activeAccount = ref<string>('vishnuarunkmgupta@gmail.com') // Unified account selector state
 
 export function useMail() {
@@ -381,7 +381,7 @@ export function useMail() {
     selectedEmailId.value = firstFiltered ? firstFiltered.id : null
   }
 
-  const setViewMode = (mode: 'digest' | 'inbox' | 'chat' | 'settings') => {
+  const setViewMode = (mode: 'digest' | 'inbox' | 'chat' | 'settings' | 'compose') => {
     viewMode.value = mode
   }
 

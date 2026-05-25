@@ -9,7 +9,8 @@ import {
   Settings,
   Plus,
   Inbox,
-  Sparkles
+  Sparkles,
+  SquarePen
 } from '@lucide/vue'
 
 const {
@@ -120,6 +121,18 @@ function handleInboxClick() {
 
     <!-- Sidebar Main Scrolling Navigation -->
     <div class="sidebar-scrollable-content">
+
+      <!-- Compose Button Section -->
+      <div class="compose-section">
+        <button 
+          class="compose-pill-btn"
+          :class="{ 'active': viewMode === 'compose' }"
+          @click="setViewMode('compose')"
+        >
+          <SquarePen :size="15" />
+          <span>Compose</span>
+        </button>
+      </div>
 
       <!-- Timeline Navigation Section -->
       <div class="nav-section">
@@ -541,5 +554,43 @@ function handleInboxClick() {
   background-color: var(--bg-secondary);
 }
 
+/* Compose Button Section */
+.compose-section {
+  padding: 4px 8px 8px;
+}
+
+.compose-pill-btn {
+  width: 100%;
+  height: 38px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.compose-pill-btn:hover {
+  background-color: transparent;
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.compose-pill-btn.active {
+  background-color: transparent;
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+  font-weight: 700;
+}
 
 </style>

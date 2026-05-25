@@ -27,19 +27,20 @@ useHead({
 </script>
 
 <template>
-  <DashboardLayout :hide-middle="viewMode === 'chat'">
+  <DashboardLayout :hide-middle="viewMode === 'chat' || viewMode === 'compose'">
     <template #left>
       <LeftPanel />
     </template>
     
     <template #middle>
       <SettingsSidebar v-if="viewMode === 'settings'" @select-category="handleSelectSettingsCategory" />
-      <MiddlePanel v-else-if="viewMode !== 'chat'" />
+      <MiddlePanel v-else-if="viewMode !== 'chat' && viewMode !== 'compose'" />
     </template>
     
     <template #right>
       <SettingsDetailView v-if="viewMode === 'settings'" :category="activeSettingsCategory" />
       <BubblesAiView v-else-if="viewMode === 'chat'" />
+      <ComposeView v-else-if="viewMode === 'compose'" />
       <RightPanel v-else />
     </template>
   </DashboardLayout>
