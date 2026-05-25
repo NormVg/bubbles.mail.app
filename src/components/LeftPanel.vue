@@ -9,8 +9,7 @@ import {
   Settings,
   Plus,
   Inbox,
-  Sparkles,
-  Calendar
+  Sparkles
 } from '@lucide/vue'
 
 const {
@@ -74,26 +73,7 @@ function handleInboxClick() {
   }, 0)
 }
 
-function handleCustomDateSelect(event: Event) {
-  const target = event.target as HTMLInputElement
-  if (!target.value) return
-  
-  // Target value format: YYYY-MM-DD (e.g. 2026-05-15)
-  const dateObj = new Date(target.value)
-  if (isNaN(dateObj.getTime())) return
-  
-  // Format as 'ddd, MMM D' (e.g. 'Fri, May 15')
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  
-  const ddd = days[dateObj.getDay()]
-  const MMM = months[dateObj.getMonth()]
-  const D = dateObj.getDate()
-  
-  const dateKeyStr = `${ddd}, ${MMM} ${D}`
-  
-  setSelectedDateKey(dateKeyStr)
-}
+
 </script>
 
 <template>
@@ -186,18 +166,7 @@ function handleCustomDateSelect(event: Event) {
             </div>
           </li>
 
-          <!-- Choose custom past date -->
-          <li class="nav-item timeline-item custom-date-picker-item">
-            <label class="custom-date-label-wrapper">
-              <Calendar :size="15" class="nav-icon date-chevron" />
-              <span class="past-date-label choose-date-text" style="opacity: 0.65;">Choose date...</span>
-              <input 
-                type="date" 
-                class="hidden-date-input" 
-                @change="handleCustomDateSelect"
-              />
-            </label>
-          </li>
+
 
         </ul>
       </div>
@@ -572,27 +541,5 @@ function handleCustomDateSelect(event: Event) {
   background-color: var(--bg-secondary);
 }
 
-/* Custom Date Picker Styles */
-.custom-date-picker-item {
-  position: relative;
-  overflow: hidden;
-}
 
-.custom-date-label-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  cursor: pointer;
-}
-
-.hidden-date-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
 </style>

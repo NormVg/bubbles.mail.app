@@ -1,64 +1,222 @@
 <script setup lang="ts">
-import { Sparkles, Inbox } from '@lucide/vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Sparkles, Inbox, CalendarDays, ChevronLeft, ChevronRight, X } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 
 const { viewMode, setViewMode, searchQuery, setSearchQuery } = useMail()
-const { selectedReport, selectedDateKey } = useDailyDigest()
+const { selectedReport, selectedDateKey, setSelectedDateKey } = useDailyDigest()
 
 function handleSearchInput(event: Event) {
   const target = event.target as HTMLInputElement
   setSearchQuery(target.value)
 }
+
+// ─── Custom Calendar Date Picker ────────────────────────────────────────────
+const showCalendar = ref(false)
+const calendarRef = ref<HTMLElement | null>(null)
+
+const today = new Date()
+const calendarMonth = ref(today.getMonth())
+const calendarYear = ref(today.getFullYear())
+
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December'
+]
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const SHORT_DAYS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+interface CalCell {
+  day: number | null
+  date: Date | null
+}
+
+const calendarCells = computed<CalCell[]>(() => {
+  const y = calendarYear.value
+  const m = calendarMonth.value
+  const firstDow = new Date(y, m, 1).getDay()
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  const cells: CalCell[] = []
+  for (let i = 0; i < firstDow; i++) cells.push({ day: null, date: null })
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, date: new Date(y, m, d) })
+  return cells
+})
+
+function prevMonth() {
+  if (calendarMonth.value === 0) { calendarMonth.value = 11; calendarYear.value-- }
+  else calendarMonth.value--
+}
+function nextMonth() {
+  if (calendarMonth.value === 11) { calendarMonth.value = 0; calendarYear.value++ }
+  else calendarMonth.value++
+}
+
+function dateToKey(d: Date): string {
+  const td = new Date(); td.setHours(0,0,0,0)
+  const yd = new Date(td); yd.setDate(yd.getDate() - 1)
+  const dc = new Date(d); dc.setHours(0,0,0,0)
+  if (dc.getTime() === td.getTime()) return 'Today'
+  if (dc.getTime() === yd.getTime()) return 'Yesterday'
+  return `${SHORT_DAYS[d.getDay()]}, ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`
+}
+
+function keyToDate(key: string): Date | null {
+  if (!key) return null
+  if (key === 'Today') return new Date()
+  if (key === 'Yesterday') { const d = new Date(); d.setDate(d.getDate() - 1); return d }
+  // parse 'Fri, May 15'
+  const parts = key.split(', ')
+  if (parts.length === 2) {
+    const [, monthDay] = parts
+    const [mon, day] = monthDay.split(' ')
+    const mIdx = SHORT_MONTHS.indexOf(mon)
+    if (mIdx !== -1) return new Date(today.getFullYear(), mIdx, parseInt(day))
+  }
+  return null
+}
+
+function selectDay(cell: CalCell) {
+  if (!cell.date) return
+  setSelectedDateKey(dateToKey(cell.date))
+  showCalendar.value = false
+}
+
+function isSelected(cell: CalCell) {
+  if (!cell.date || !selectedDateKey.value) return false
+  const sel = keyToDate(selectedDateKey.value)
+  if (!sel) return false
+  return cell.date.toDateString() === sel.toDateString()
+}
+
+function isTodayCell(cell: CalCell) {
+  if (!cell.date) return false
+  return cell.date.toDateString() === today.toDateString()
+}
+
+function clearDate() {
+  setSelectedDateKey('')
+  showCalendar.value = false
+}
+
+function toggleCalendar() {
+  showCalendar.value = !showCalendar.value
+}
+
+function handleOutsideClick(e: MouseEvent) {
+  if (calendarRef.value && !calendarRef.value.contains(e.target as Node)) {
+    showCalendar.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('mousedown', handleOutsideClick))
+onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
 </script>
 
 <template>
   <section class="pane pane-middle">
-    <!-- Header: Classic layout with static title depending on active page context -->
+
+    <!-- ── Header ─────────────────────────────────────────────────────────── -->
     <div class="pane-header middle-header">
-      <div class="pane-title flex-center gap-6" style="display: flex; align-items: center; gap: 8px;">
-        <Sparkles v-if="viewMode === 'digest'" :size="15" style="color: var(--text-secondary);" />
-        <Inbox v-else-if="viewMode === 'inbox'" :size="15" style="color: var(--text-secondary);" />
-        <span class="header-title-text" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">{{ viewMode === 'digest' ? 'Intelligence' : 'Inbox' }}</span>
+      <div class="header-left">
+        <Sparkles v-if="viewMode === 'digest'" :size="15" class="header-icon" />
+        <Inbox    v-else-if="viewMode === 'inbox'" :size="15" class="header-icon" />
+        <span class="header-title">{{ viewMode === 'digest' ? 'Intelligence' : 'Inbox' }}</span>
       </div>
-      
-      <!-- Right Side Day Actions -->
-      <div class="header-right-actions" style="display: flex; align-items: center; gap: 8px;">
-        <!-- If in Daily Digest, show date context and option to see raw emails -->
-        <template v-if="viewMode === 'digest'">
-          <span class="timeline-day-context">{{ selectedReport.dateKey }}</span>
-          <button 
-            class="header-toggle-mode-btn"
-            @click="setViewMode('inbox')"
-            title="Switch to raw emails for this day"
+
+      <div class="header-right">
+
+        <!-- ── Date filter (Inbox only) ──────────────────────────────────── -->
+        <div v-if="viewMode === 'inbox'" class="date-picker-wrapper" ref="calendarRef">
+          <!-- Trigger button -->
+          <button
+            class="date-trigger-btn"
+            :class="{ 'has-date': selectedDateKey }"
+            @click="toggleCalendar"
+            title="Filter by date"
           >
+            <CalendarDays :size="13" />
+            <span>{{ selectedDateKey || 'Filter by date' }}</span>
+            <X v-if="selectedDateKey" :size="12" class="clear-x" @click.stop="clearDate" />
+          </button>
+
+          <!-- ── Calendar dropdown ─────────────────────────────────────── -->
+          <Transition name="cal">
+            <div v-if="showCalendar" class="calendar-dropdown">
+              <!-- Month nav -->
+              <div class="cal-nav">
+                <button class="cal-nav-btn" @click="prevMonth" title="Previous month">
+                  <ChevronLeft :size="14" />
+                </button>
+                <span class="cal-month-label">
+                  {{ MONTH_NAMES[calendarMonth] }} {{ calendarYear }}
+                </span>
+                <button class="cal-nav-btn" @click="nextMonth" title="Next month">
+                  <ChevronRight :size="14" />
+                </button>
+              </div>
+
+              <!-- Day-of-week headers -->
+              <div class="cal-grid">
+                <div v-for="d in DAY_LABELS" :key="d" class="cal-dow">{{ d }}</div>
+
+                <!-- Day cells -->
+                <div
+                  v-for="(cell, i) in calendarCells"
+                  :key="i"
+                  class="cal-cell"
+                  :class="{
+                    'empty': !cell.day,
+                    'is-today': isTodayCell(cell),
+                    'is-selected': isSelected(cell)
+                  }"
+                  @click="selectDay(cell)"
+                >
+                  {{ cell.day ?? '' }}
+                </div>
+              </div>
+
+              <!-- Footer actions -->
+              <div class="cal-footer">
+                <button v-if="selectedDateKey" class="cal-clear-btn" @click="clearDate">
+                  <X :size="11" /> Clear filter
+                </button>
+                <button class="cal-today-btn" @click="selectDay({ day: today.getDate(), date: today })">
+                  Today
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <!-- ── View digest / View emails toggle ──────────────────────────── -->
+        <template v-if="viewMode === 'digest'">
+          <button class="view-toggle-btn secondary" @click="setViewMode('inbox')" title="See raw emails">
+            <Inbox :size="13" />
             View emails
           </button>
         </template>
-        
-        <!-- If in Inbox and a timeline date is selected, show option to view AI Digest -->
+
         <template v-else-if="viewMode === 'inbox' && selectedDateKey">
-          <span class="timeline-day-context">{{ selectedDateKey }}</span>
-          <button 
-            class="header-toggle-mode-btn"
-            @click="setViewMode('digest')"
-            title="Switch to AI Daily Digest for this day"
-          >
+          <button class="view-toggle-btn accent" @click="setViewMode('digest')" title="See AI digest for this day">
+            <Sparkles :size="13" />
             View digest
           </button>
         </template>
+
       </div>
     </div>
 
-    <!-- Search Input (Matches screenshot design) -->
+    <!-- ── Search ─────────────────────────────────────────────────────────── -->
     <div class="search-container">
       <div class="search-bar">
         <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <input 
-          type="text" 
-          :value="searchQuery" 
+        <input
+          type="text"
+          :value="searchQuery"
           placeholder="Search..."
           @input="handleSearchInput"
           class="search-input"
@@ -66,92 +224,305 @@ function handleSearchInput(event: Event) {
       </div>
     </div>
 
-    <!-- Main List Scroll Container -->
+    <!-- ── List ───────────────────────────────────────────────────────────── -->
     <div class="list-scroll-area">
-      <!-- Traditional Inbox View -->
       <EmailList v-if="viewMode === 'inbox'" />
-      
-      <!-- Bubbles AI Daily Report View -->
       <DailyDigest v-else />
     </div>
+
   </section>
 </template>
 
 <style scoped>
-.tabs-container {
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.middle-header {
   display: flex;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.tab-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  font-weight: 500;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-icon {
   color: var(--text-secondary);
+}
+
+.header-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Date picker trigger ─────────────────────────────────────────────────── */
+.date-picker-wrapper {
+  position: relative;
+}
+
+.date-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
-.tab-btn.active {
-  background-color: var(--bg-primary);
+.date-trigger-btn:hover {
+  border-color: var(--text-muted);
   color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
 }
 
-.view-mode-tabs {
-  display: flex;
-  background-color: var(--bg-secondary);
+.date-trigger-btn.has-date {
+  background: var(--bg-tertiary);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.clear-x {
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+  flex-shrink: 0;
+}
+.clear-x:hover { opacity: 1; }
+
+/* ── Calendar dropdown ───────────────────────────────────────────────────── */
+.calendar-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 14px;
+  width: 248px;
+  user-select: none;
+}
+
+/* Nav row */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cal-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
-  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.cal-nav-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.cal-month-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* Grid: 7 columns */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
   gap: 2px;
 }
 
-.mode-tab-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
+.cal-dow {
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 0 6px;
+  letter-spacing: 0.03em;
+}
+
+.cal-cell {
+  aspect-ratio: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 450;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cal-cell:not(.empty):hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.cal-cell.empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.cal-cell.is-today {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cal-cell.is-today::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary-color, var(--text-primary));
+}
+
+/* Make today cell relative for the dot */
+.cal-cell.is-today {
+  position: relative;
+}
+
+.cal-cell.is-selected {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.cal-cell.is-selected:hover {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+/* Footer */
+.cal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  gap: 8px;
+}
+
+.cal-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
-
-.mode-tab-btn:hover {
+.cal-clear-btn:hover {
+  border-color: var(--text-secondary);
   color: var(--text-primary);
 }
 
-.mode-tab-btn.active {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
-  font-weight: 500;
-}
-
-.timeline-day-context {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background-color: var(--bg-secondary);
+.cal-today-btn {
   padding: 4px 10px;
-  border-radius: 9999px;
+  border-radius: 6px;
   border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+}
+.cal-today-btn:hover {
+  background: var(--bg-tertiary);
 }
 
-/* Search Bar Styling */
+/* ── Transition ──────────────────────────────────────────────────────────── */
+.cal-enter-active,
+.cal-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.cal-enter-from,
+.cal-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+/* ── View toggle buttons ─────────────────────────────────────────────────── */
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Secondary: "View emails" */
+.view-toggle-btn.secondary {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+.view-toggle-btn.secondary:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Accent: "View digest" — solid & prominent */
+.view-toggle-btn.accent {
+  border: none;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.view-toggle-btn.accent:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
 .search-container {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
@@ -168,7 +539,6 @@ function handleSearchInput(event: Event) {
   height: 38px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-
 .search-bar:focus-within {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px var(--primary-light);
@@ -179,6 +549,7 @@ function handleSearchInput(event: Event) {
   height: 16px;
   color: var(--text-muted);
   margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .search-input {
@@ -191,34 +562,12 @@ function handleSearchInput(event: Event) {
   color: var(--text-primary);
   outline: none;
 }
+.search-input::placeholder { color: var(--text-muted); }
 
-.search-input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Scroll Area */
+/* ── List scroll area ────────────────────────────────────────────────────── */
 .list-scroll-area {
   flex: 1;
   overflow-y: auto;
   background-color: var(--bg-primary);
-}
-
-.header-toggle-mode-btn {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.header-toggle-mode-btn:hover {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
 }
 </style>
