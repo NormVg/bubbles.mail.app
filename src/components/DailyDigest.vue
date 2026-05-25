@@ -17,8 +17,13 @@ function viewSourceEmail(emailId: string) {
   <div class="daily-digest animate-fade-in">
     <!-- Date Header -->
     <div class="digest-header">
-      <span class="digest-meta"><Sparkles :size="14" /> Daily summary</span>
-      <h3 class="digest-date">{{ selectedReport.dateFormatted }}</h3>
+      <div class="digest-header-left">
+        <span class="digest-meta"><Sparkles :size="14" /> Daily summary</span>
+        <h3 class="digest-date">{{ selectedReport.dateFormatted }}</h3>
+      </div>
+      <button class="view-emails-btn flex-center" @click="setViewMode('inbox')" title="View all emails for this day">
+        View emails &rarr;
+      </button>
     </div>
 
     <!-- Section 1: Executive Summary Card -->
@@ -150,6 +155,34 @@ function viewSourceEmail(emailId: string) {
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 12px;
   margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.digest-header-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.view-emails-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  height: 28px;
+}
+
+.view-emails-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
 }
 
 .digest-meta {

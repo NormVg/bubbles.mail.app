@@ -543,6 +543,9 @@ function discardDraft() {
   flex-direction: column;
   gap: 16px;
   background-color: var(--bg-primary);
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .detail-header-card {

@@ -302,7 +302,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 680px;
+  max-width: 600px;
   width: 100%;
   margin: 0 auto;
 }
@@ -421,7 +421,7 @@ onMounted(() => {
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: none;
-  max-width: 680px;
+  max-width: 600px;
   width: 100%;
   margin: 0 auto;
 }
@@ -465,7 +465,7 @@ onMounted(() => {
   padding: 10px 20px 20px;
   flex-shrink: 0;
   background-color: var(--bg-primary);
-  max-width: 680px;
+  max-width: 600px;
   width: 100%;
   margin: 0 auto;
 }
