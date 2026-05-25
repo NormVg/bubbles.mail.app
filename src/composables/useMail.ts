@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useDailyDigest } from './useDailyDigest'
 
 export interface Email {
   id: string
@@ -11,16 +12,17 @@ export interface Email {
   category: 'social' | 'updates' | 'forums' | 'shopping' | 'promotions' | 'primary'
   unread: boolean
   account: string // target account email
+  dateKey: string // timeline context: 'Today' | 'Yesterday' | 'Thu, Apr 23' etc.
 }
 
-// Initial state mock data mapped to specific accounts matching the screenshot
+// Initial state mock data mapped to specific accounts and timeline dates
 const mockEmails: Email[] = [
   {
     id: '1',
     sender: 'William Smith',
     senderEmail: 'william.smith@example.com',
     subject: 'Meeting Tomorrow',
-    date: 'over 2 years ago',
+    date: 'Today, 10:00 AM',
     body: `Hi, let's have a meeting tomorrow to discuss the project. I've been reviewing the project details and have some ideas I'd like to share. It's crucial that we align on our timeline, resource allocation, and core deliverables before the quarterly presentation.
 
 I have compiled a brief presentation deck outlining:
@@ -36,14 +38,15 @@ VP of Engineering, Bubbles.mail`,
     tags: ['meeting', 'work', 'important'],
     category: 'primary',
     unread: false,
-    account: 'vishnuarunkmgupta@gmail.com'
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Today'
   },
   {
     id: '2',
     sender: 'Alice Smith',
     senderEmail: 'alice.smith@example.com',
     subject: 'Re: Project Update',
-    date: 'over 2 years ago',
+    date: 'Tue, Apr 21, 4:30 PM',
     body: `Thank you for the project update. It looks great! I've gone through the report, and the progress is impressive. The team has done a fantastic job, and I'm very confident we will hit our Q2 launch target.
 
 I especially appreciated the breakdown of the AI-driven smart categorization pipeline. The user flows feel intuitive, and the latency reduction looks very promising. 
@@ -60,14 +63,15 @@ Product Lead`,
     tags: ['work', 'important'],
     category: 'primary',
     unread: false,
-    account: 'vishnuarunkmgupta@gmail.com'
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Tue, Apr 21'
   },
   {
     id: '3',
     sender: 'Bob Johnson',
     senderEmail: 'bob.johnson@example.com',
     subject: 'Weekend Plans',
-    date: 'almost 3 years ago',
+    date: 'Yesterday, 9:15 AM',
     body: `Any plans for the weekend? I was thinking of going hiking in the nearby mountains. It's been a while since we had some outdoor fun. If you're free, we could head out early Saturday morning to catch the sunrise at the peak.
 
 The weather forecast is looking perfect—clear skies and cool temperatures. Let me know if you're interested and if you'd like to invite anyone else. I can drive!
@@ -77,14 +81,15 @@ Bob`,
     tags: ['personal'],
     category: 'primary',
     unread: false,
-    account: 'vishnuarunkmgupta@gmail.com'
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Yesterday'
   },
   {
     id: '4',
     sender: 'Emily Davis',
     senderEmail: 'emily.davis@example.com',
     subject: 'Re: Question about Budget',
-    date: 'almost 3 years ago',
+    date: 'Today, 11:15 AM',
     body: `I have a question about the budget for the upcoming project. It seems like there's a discrepancy in the allocation of resources. I've reviewed the budget sheets and noticed that the QA team allocation is about 15% lower than initially proposed, while the dev infrastructure allocation has increased.
 
 Could you clarify if this shift was deliberate, or if we need to adjust the figures? Ensuring our QA team is fully funded is vital to preventing post-launch regressions in the desktop app client.
@@ -97,14 +102,15 @@ Head of QA`,
     tags: ['work', 'budget'],
     category: 'updates',
     unread: true,
-    account: 'vishnuarunkmgupta@gmail.com'
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Today'
   },
   {
     id: '5',
     sender: 'Michael Wilson',
     senderEmail: 'michael.wilson@example.com',
     subject: 'Important Announcement',
-    date: 'almost 3 years ago',
+    date: 'Today, 2:00 PM',
     body: `I have an important announcement to make during our team meeting today. We have officially secured our Series A funding round! This is a massive milestone for Bubbles.mail and is a testament to the incredibly hard work each of you has put in.
 
 With this funding, we will be expanding the engineering and product team, accelerating our AI Daily Digest features, and moving into our new downtown office space next month.
@@ -117,14 +123,15 @@ Co-Founder & CEO`,
     tags: ['work', 'important'],
     category: 'updates',
     unread: true,
-    account: 'vishnuarunkmgupta@gmail.com'
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Today'
   },
   {
     id: '6',
     sender: 'Dribbble Weekly',
     senderEmail: 'digest@dribbble.com',
     subject: 'Inspiration: Sleek Mail Clients and AI Dashboards',
-    date: '3 days ago',
+    date: 'Wed, Apr 22, 11:30 AM',
     body: `Here is your weekly dose of design inspiration from Dribbble! This week, we've curated the most popular UI/UX concepts for next-generation email applications, intelligent workspaces, and AI summarization feeds.
 
 Trending Shots:
@@ -139,14 +146,15 @@ The Dribbble Team`,
     tags: ['inspiration', 'social'],
     category: 'social',
     unread: false,
-    account: 'thenormvg@gmail.com'
+    account: 'thenormvg@gmail.com',
+    dateKey: 'Wed, Apr 22'
   },
   {
     id: '7',
     sender: 'GitHub',
     senderEmail: 'noreply@github.com',
     subject: '[GitHub] Security Alert: dependency update required',
-    date: '4 days ago',
+    date: 'Today, 8:30 AM',
     body: `We found a known vulnerability in one of your dependencies. A package in bubbles-mail has a moderate severity security warning.
 
 Vulnerability Details:
@@ -162,14 +170,15 @@ The GitHub Security Team`,
     tags: ['security', 'forums'],
     category: 'forums',
     unread: true,
-    account: 'thenormvg@gmail.com'
+    account: 'thenormvg@gmail.com',
+    dateKey: 'Today'
   },
   {
     id: '8',
     sender: 'Figma Billing',
     senderEmail: 'billing@figma.com',
     subject: 'Your monthly Figma invoice is ready',
-    date: '5 days ago',
+    date: 'Yesterday, 3:45 PM',
     body: `Your invoice for Figma Professional subscription has been generated.
 
 Invoice Details:
@@ -184,14 +193,15 @@ The Figma Team`,
     tags: ['receipt', 'shopping'],
     category: 'shopping',
     unread: false,
-    account: 'thealphaones.hq@gmail.com'
+    account: 'thealphaones.hq@gmail.com',
+    dateKey: 'Yesterday'
   },
   {
     id: '9',
     sender: 'Vercel Teams',
     senderEmail: 'promo@vercel.com',
     subject: 'Deploy your Nuxt app instantly with Vercel Ship',
-    date: '1 week ago',
+    date: 'Thu, Apr 23, 10:00 AM',
     body: `Deploying Nuxt applications has never been easier. With Vercel Ship, get lightning-fast edge rendering, global CDN delivery, automatic image optimization, and one-click preview deployments for every Git commit.
 
 Try Vercel Ship today for free and unlock the ultimate developer experience.
@@ -201,7 +211,54 @@ Vercel Team`,
     tags: ['promotions', 'advertisement'],
     category: 'promotions',
     unread: true,
-    account: 'thealphaones.hq@gmail.com'
+    account: 'thealphaones.hq@gmail.com',
+    dateKey: 'Thu, Apr 23'
+  },
+  {
+    id: '10',
+    sender: 'Michael Wilson',
+    senderEmail: 'michael.wilson@example.com',
+    subject: 'Weekly Roadmap & Options Pool Expansion',
+    date: 'Mon, Apr 20, 9:00 AM',
+    body: `Hi team,
+
+As part of our post-Series A weekly roadmap sync, co-founders have finalized the stock options pool parameters. 
+
+We are expanding the stock options pool to ensure we can attract top-tier talent for the upcoming Action Engine core releases and mobile client iterations next month.
+
+Please review these allocations in the options sheet before Tuesday's alignment sync.
+
+Thanks,
+Michael Wilson
+Co-Founder & CEO`,
+    tags: ['work', 'important'],
+    category: 'updates',
+    unread: false,
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Mon, Apr 20'
+  },
+  {
+    id: '11',
+    sender: 'Bubbles System',
+    senderEmail: 'sysops@bubbles.mail',
+    subject: 'Uptime Metrics: Server Health report',
+    date: 'Sun, Apr 19, 11:00 PM',
+    body: `Automated server system metrics report: 99.98% uptime. 
+All background data cleanup jobs and cache purging routines completed successfully without database locks.
+
+Metrics details:
+- CPU Load: 12% average
+- DB Query latency: 8.5ms average
+- Edge prefetch hits: 92%
+
+Everything is running stable.
+
+Bubbles System Ops`,
+    tags: ['security'],
+    category: 'updates',
+    unread: false,
+    account: 'vishnuarunkmgupta@gmail.com',
+    dateKey: 'Sun, Apr 19'
   }
 ]
 
@@ -215,15 +272,22 @@ const viewMode = ref<'digest' | 'inbox'>('digest') // 'digest' is default (Bubbl
 const activeAccount = ref<string>('vishnuarunkmgupta@gmail.com') // Unified account selector state
 
 export function useMail() {
+  const { selectedDateKey } = useDailyDigest()
+
   const selectedEmail = computed(() => 
     emails.value.find(email => email.id === selectedEmailId.value) || null
   )
 
-  // Filtered emails based on active account, search query, categories, and tabs
+  // Filtered emails based on active account, active date, search query, categories, and tabs
   const filteredEmails = computed(() => {
     return emails.value.filter(email => {
       // 0. Filter by active account context
       if (activeAccount.value && email.account !== activeAccount.value) {
+        return false
+      }
+
+      // New: Filter by active date key context (Today, Yesterday, Thu, Apr 23 etc.)
+      if (selectedDateKey.value && email.dateKey !== selectedDateKey.value) {
         return false
       }
 

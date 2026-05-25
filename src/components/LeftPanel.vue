@@ -7,17 +7,18 @@ import {
   Clock,
   ChevronLeft,
   Settings,
-  LogOut,
   Plus
 } from '@lucide/vue'
 
 const {
   activeAccount,
   setActiveAccount,
-  accountUnreadCounts
+  accountUnreadCounts,
+  filteredEmails,
+  setSelectedEmailId
 } = useMail()
 
-const { selectedDateKey, setSelectedDateKey } = useDailyDigest()
+const { selectedDateKey, setSelectedDateKey: setDateKey } = useDailyDigest()
 
 const isDarkTheme = ref(false)
 
@@ -26,8 +27,13 @@ function toggleTheme() {
   document.documentElement.classList.toggle('dark-theme', isDarkTheme.value)
 }
 
-function handleLogout() {
-  console.log('Logging out from Bubbles.mail')
+function setSelectedDateKey(date: string) {
+  setDateKey(date)
+  // Wait for computed filteredEmails to update, then select first email
+  setTimeout(() => {
+    const firstMail = filteredEmails.value[0]
+    setSelectedEmailId(firstMail ? firstMail.id : null)
+  }, 0)
 }
 </script>
 
@@ -164,9 +170,6 @@ function handleLogout() {
       <div class="footer-actions-row">
         <button class="footer-action-btn" title="Toggle Light/Dark Theme" @click="toggleTheme">
           <Settings :size="16" />
-        </button>
-        <button class="footer-action-btn" title="Logout" @click="handleLogout">
-          <LogOut :size="16" />
         </button>
       </div>
     </div>

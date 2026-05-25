@@ -9,8 +9,7 @@ const {
   sessions, 
   currentSessionId, 
   createNewSession, 
-  deleteSession, 
-  clearChat 
+  deleteSession
 } = useAiAssistant()
 
 function handleArchive() {
@@ -23,10 +22,6 @@ function handleDelete() {
   if (selectedEmail.value) {
     deleteEmail(selectedEmail.value.id)
   }
-}
-
-function handleClearChat() {
-  clearChat()
 }
 </script>
 
@@ -71,9 +66,22 @@ function handleClearChat() {
         <div class="empty-state-card">
           <div class="empty-illustration">
             <svg viewBox="0 0 100 100" fill="none" class="empty-svg">
-              <circle cx="50" cy="50" r="36" stroke="var(--border-color)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <circle cx="50" cy="50" r="8" fill="var(--primary-light)" opacity="0.4" class="pulse-ring" />
-              <path d="M45 45L40 70L52 61L65 72L70 67L59 56L72 52L45 45Z" fill="var(--text-primary)" stroke="var(--bg-primary)" stroke-width="2" />
+              <defs>
+                <linearGradient id="envelopeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--bg-primary)" />
+                  <stop offset="100%" stop-color="var(--bg-secondary)" />
+                </linearGradient>
+                <filter id="envelopeShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="var(--text-primary)" flood-opacity="0.06" />
+                </filter>
+              </defs>
+              <circle cx="50" cy="50" r="38" stroke="var(--border-color)" stroke-width="1.2" stroke-dasharray="3 3" />
+              <g class="floating-envelope-group" filter="url(#envelopeShadow)">
+                <rect x="26" y="34" width="48" height="32" rx="4" fill="url(#envelopeGrad)" stroke="var(--border-color)" stroke-width="1.5" />
+                <path d="M26 35L50 51L74 35" stroke="var(--text-muted)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M26 63L44 49" stroke="var(--border-color)" stroke-width="1" stroke-linecap="round" />
+                <path d="M74 63L56 49" stroke="var(--border-color)" stroke-width="1" stroke-linecap="round" />
+              </g>
             </svg>
           </div>
           <h3 class="empty-title">No message selected</h3>
@@ -109,12 +117,6 @@ function handleClearChat() {
               title="Delete this chat session"
             >
               <Trash2 :size="12" />
-            </button>
-          </div>
-
-          <div class="ai-header-right">
-            <button class="minimal-clear-btn flex-center" @click="handleClearChat" title="Reset this chat">
-              Reset
             </button>
           </div>
         </div>
@@ -206,15 +208,15 @@ function handleClearChat() {
   height: 100%;
 }
 
-.pulse-ring {
-  animation: pulseRing 2s infinite ease-in-out;
-  transform-origin: 50px 50px;
+.floating-envelope-group {
+  animation: floatEnvelope 3s ease-in-out infinite;
+  transform-origin: center;
 }
 
-@keyframes pulseRing {
-  0% { transform: scale(0.85); opacity: 0.3; }
-  50% { transform: scale(1.1); opacity: 0.6; }
-  100% { transform: scale(0.85); opacity: 0.3; }
+@keyframes floatEnvelope {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
 }
 
 .empty-title {
