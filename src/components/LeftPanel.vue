@@ -7,7 +7,9 @@ import {
   Clock,
   ChevronLeft,
   Settings,
-  Plus
+  Plus,
+  Inbox,
+  Sparkles
 } from '@lucide/vue'
 
 const {
@@ -15,7 +17,9 @@ const {
   setActiveAccount,
   accountUnreadCounts,
   filteredEmails,
-  setSelectedEmailId
+  setSelectedEmailId,
+  viewMode,
+  setViewMode
 } = useMail()
 
 const { selectedDateKey, setSelectedDateKey: setDateKey } = useDailyDigest()
@@ -82,6 +86,24 @@ function setSelectedDateKey(date: string) {
     <!-- Sidebar Main Scrolling Navigation -->
     <div class="sidebar-scrollable-content">
 
+      <!-- Primary App Sections (Dedicated Inbox) -->
+      <div class="nav-section primary-sections">
+        <ul class="nav-list">
+          <li 
+            class="nav-item primary-nav-item" 
+            :class="{ 'active': viewMode === 'inbox' || viewMode === 'digest' }"
+            @click="setViewMode('digest')"
+          >
+            <div class="nav-item-left">
+              <Inbox :size="15" class="nav-icon" />
+              <span>Inbox</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="nav-divider"></div>
+
       <!-- Timeline Navigation Section -->
       <div class="nav-section">
         <h3 class="section-uppercase-title">Timeline</h3>
@@ -132,6 +154,24 @@ function setSelectedDateKey(date: string) {
 
       <div class="nav-divider"></div>
 
+      <!-- Bubbles.ai Section (strictly below Timeline) -->
+      <div class="nav-section">
+        <ul class="nav-list">
+          <li 
+            class="nav-item primary-nav-item" 
+            :class="{ 'active': viewMode === 'chat' }"
+            @click="setViewMode('chat')"
+          >
+            <div class="nav-item-left">
+              <Sparkles :size="15" class="nav-icon" />
+              <span>Bubbles.ai</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="nav-divider"></div>
+
       <!-- Accounts Section exactly matching screenshot -->
       <div class="nav-section accounts-section">
         <h3 class="section-uppercase-title">Accounts</h3>
@@ -168,7 +208,12 @@ function setSelectedDateKey(date: string) {
     <!-- Sidebar Fixed Footer -->
     <div class="sidebar-footer">
       <div class="footer-actions-row">
-        <button class="footer-action-btn" title="Toggle Light/Dark Theme" @click="toggleTheme">
+        <button 
+          class="footer-action-btn" 
+          :class="{ 'active-settings': viewMode === 'settings' }"
+          title="AI & App Settings" 
+          @click="setViewMode('settings')"
+        >
           <Settings :size="16" />
         </button>
       </div>
@@ -458,5 +503,12 @@ function setSelectedDateKey(date: string) {
 
 .footer-action-btn:hover {
   color: var(--text-primary);
+}
+
+.footer-action-btn.active-settings {
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 6px;
 }
 </style>

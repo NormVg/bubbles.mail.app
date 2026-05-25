@@ -1,9 +1,18 @@
+<script setup lang="ts">
+defineProps({
+  hideMiddle: {
+    type: Boolean,
+    default: false
+  }
+})
+</script>
+
 <template>
   <div class="app-wrapper">
     <div class="pane-layout animate-fade-in">
       <slot name="left" />
-      <div class="pane-divider"></div>
-      <slot name="middle" />
+      <div class="pane-divider" v-if="!hideMiddle"></div>
+      <slot name="middle" v-if="!hideMiddle" />
       <div class="pane-divider"></div>
       <slot name="right" />
     </div>

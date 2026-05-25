@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { 
   Sparkles, 
   Zap, 
@@ -17,8 +17,21 @@ import {
   CornerUpRight
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
+import { useSettings } from '../composables/useSettings'
 
 const { selectedEmail } = useMail()
+const { settings } = useSettings()
+
+const manuallyGeneratedSummary = ref(false)
+
+const showSummary = computed(() => {
+  // When selectedEmail changes, reset manual generation trigger
+  return settings.value.autoGenerateSummary || manuallyGeneratedSummary.value
+})
+
+watch(selectedEmail, () => {
+  manuallyGeneratedSummary.value = false
+})
 
 // Interactive reply states
 const draftState = ref<'empty' | 'dictating' | 'generating' | 'drafted'>('empty')
@@ -160,6 +173,67 @@ function stopVoiceInput() {
   draftState.value = 'empty'
 }
 
+function getDraftByPersonality(recipientName: string, subject: string, userPrompt: string, attachmentNotice: string) {
+  const tone = settings.value.agentPersonality
+  const custom = settings.value.customInstructions ? `\n\n[System Guidelines: ${settings.value.customInstructions}]` : ''
+  
+  if (tone === 'friendly') {
+    return `Subject: Re: ${subject}
+
+Hey ${recipientName}! 😊
+
+Thanks so much for reaching out!
+
+${userPrompt ? `Regarding what you asked: "${userPrompt}"\n\nI just went through the details and everything sounds absolutely awesome! Let's definitely find some time next week to catch up and align on the specifics. We can jump on a video call to hash it out.` : `I just completed a quick review of the thread details! Everything looks super exciting. The team is making awesome progress and I'm really looking forward to our alignment sync tomorrow at 10:00 AM.`}${attachmentNotice}
+
+Let's make it happen! Have a fantastic day!
+
+Warmly,
+Alicia${custom}`
+  }
+  
+  if (tone === 'creative') {
+    return `Subject: Re: ${subject}
+
+Hi ${recipientName}! ✨
+
+Wow, thank you for sending this over! This is brilliant! 🚀
+
+${userPrompt ? `I love the direction of: "${userPrompt}"\n\nThis sparks some really cool ideas! Let's definitely coordinate our calendars so we can do a deep-dive brainstorming session on these specifics next week.` : `I've been reviewing our milestones and the sprint progression looks incredibly stellar! 🌟 Let's gather all our creative thoughts and map out the next launch milestones during our sync tomorrow at 10:00 AM.`}${attachmentNotice}
+
+Can't wait to collaborate and shape this further!
+
+Best and brightest,
+Alicia 🥂${custom}`
+  }
+  
+  if (tone === 'concise') {
+    return `Subject: Re: ${subject}
+
+${recipientName}:
+
+${userPrompt ? `Re: "${userPrompt}"\n\n- Details reviewed. Path forward is approved.\n- Action: Schedule 10m sync next week to lock in specifics.` : `- Milestones reviewed: Sprint progression is stable.\n- Action: Attending technical alignment sync tomorrow 10:00 AM (Conference Room B).`}${attachmentNotice}
+
+- Alicia${custom}`
+  }
+  
+  // Default: 'professional'
+  return `Subject: Re: ${subject}
+
+Hi ${recipientName},
+
+Thank you for your message.
+
+${userPrompt ? `Regarding your inquiry: "${userPrompt}"
+
+I have completed a review of the parameters, and the proposed path forward is appropriate. Let us ensure we coordinate our calendars to review the technical details next week.` : `I have reviewed the milestone parameters and the current sprint progression is highly satisfactory. I will prepare my feedback regarding the API specifications and will join you tomorrow at 10:00 AM in Conference Room B.`}${attachmentNotice}
+
+I look forward to our alignment sync.
+
+Best regards,
+Alicia${custom}`
+}
+
 // Generate draft reply with premium real-time streaming
 function generateDraft() {
   if (draftState.value === 'generating') return
@@ -175,61 +249,7 @@ function generateDraft() {
       attachedFiles.value.map(f => `- ${f.name}`).join('\n')
   }
 
-  let targetText = ''
-  if (userPrompt) {
-    targetText = `Subject: Re: ${subject}
-
-Hi ${recipientName},
-
-Thanks for your email.
-
-Regarding your request: "${userPrompt}"
-
-I've reviewed the core details and that sounds like a great path forward. Let's make sure we coordinate our schedules so we can sync on these specifics next week.${attachmentNotice}
-
-I look forward to connecting and finalizing this with you!
-
-Best regards,
-Alicia`
-  } else {
-    // Auto-draft based purely on thread context
-    if (selectedEmail.value?.subject.includes('Meeting') || selectedEmail.value?.subject.includes('Roadmap')) {
-      targetText = `Subject: Re: ${subject}
-
-Hi ${recipientName},
-
-Thanks for sending over the project timeline details and milestones deck.
-
-I have completed a review of the sprint details. The progression looks fantastic! I will prepare my feedback on the API models and will join you at 10:00 AM tomorrow in Conference Room B.${attachmentNotice}
-
-See you then!
-
-Best regards,
-Alicia`
-    } else if (selectedEmail.value?.subject.includes('Budget')) {
-      targetText = `Subject: Re: ${subject}
-
-Hi ${recipientName},
-
-Thank you for raising these points about the QA resource allocation adjustment.
-
-I completely agree that desktop client stability is key. I've review the proposed spreadsheet you shared.${attachmentNotice} Let's secure 10 minutes next Tuesday to review the QA allocation and balance the figures.
-
-Thanks for flags,
-Alicia`
-    } else {
-      targetText = `Subject: Re: ${subject}
-
-Hi ${recipientName},
-
-Thanks for reaching out and sharing these updates.
-
-I've reviewed the information you provided and everything looks solid on my end.${attachmentNotice} I appreciate the detailed alignment and will let you know if any questions arise.
-
-Best regards,
-Alicia`
-    }
-  }
+  const targetText = getDraftByPersonality(recipientName, subject, userPrompt, attachmentNotice)
 
   // Begin Streaming
   draftState.value = 'generating'
@@ -313,7 +333,7 @@ function discardDraft() {
     </div>
 
     <!-- AI Summary Card -->
-    <div v-if="aiSummary" class="ai-summary-card">
+    <div v-if="aiSummary && showSummary" class="ai-summary-card">
       <div class="summary-header">
         <div class="summary-header-left">
           <span class="summary-icon flex-center"><Sparkles :size="12" /></span>
@@ -338,6 +358,17 @@ function discardDraft() {
         <span v-if="aiSummary.hasDeadline" class="signal-tag deadline">
           <ClockIcon :size="11" /> Time-sensitive
         </span>
+      </div>
+    </div>
+
+    <!-- On-Demand Summary Generation Placeholder -->
+    <div v-else-if="aiSummary && !showSummary" class="ai-summary-on-demand flex-center">
+      <div class="on-demand-inner">
+        <span class="on-demand-spark-icon flex-center"><Sparkles :size="13" /></span>
+        <span class="on-demand-notice-text">Email summary is available</span>
+        <button class="on-demand-gen-btn flex-center" @click="manuallyGeneratedSummary = true">
+          <Sparkles :size="11" /> Generate summary
+        </button>
       </div>
     </div>
 
@@ -1365,5 +1396,56 @@ function discardDraft() {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+.ai-summary-on-demand {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background-color: var(--bg-secondary);
+  width: 100%;
+}
+
+.on-demand-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.on-demand-spark-icon {
+  width: 22px;
+  height: 22px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.on-demand-notice-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.on-demand-gen-btn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  gap: 4px;
+}
+
+.on-demand-gen-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
 }
 </style>

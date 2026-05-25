@@ -1,6 +1,17 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useMail } from './composables/useMail'
+
 // Import global styling
 import './assets/css/main.css'
+
+const { viewMode } = useMail()
+
+const activeSettingsCategory = ref('ai')
+
+function handleSelectSettingsCategory(catId: string) {
+  activeSettingsCategory.value = catId
+}
 
 // Head settings for SEO & Premium experience
 useHead({
@@ -16,17 +27,20 @@ useHead({
 </script>
 
 <template>
-  <DashboardLayout>
+  <DashboardLayout :hide-middle="viewMode === 'chat'">
     <template #left>
       <LeftPanel />
     </template>
     
     <template #middle>
-      <MiddlePanel />
+      <SettingsSidebar v-if="viewMode === 'settings'" @select-category="handleSelectSettingsCategory" />
+      <MiddlePanel v-else-if="viewMode !== 'chat'" />
     </template>
     
     <template #right>
-      <RightPanel />
+      <SettingsDetailView v-if="viewMode === 'settings'" :category="activeSettingsCategory" />
+      <BubblesAiView v-else-if="viewMode === 'chat'" />
+      <RightPanel v-else />
     </template>
   </DashboardLayout>
 </template>
