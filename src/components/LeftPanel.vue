@@ -135,11 +135,10 @@ function setSelectedDateKey(date: string) {
         </ul>
       </div>
 
-      <div class="nav-divider"></div>
-
-      <!-- Bubbles.ai Section (strictly below Timeline) -->
+      <!-- Primary Navigation Links (strictly below Timeline) -->
       <div class="nav-section">
         <ul class="nav-list">
+          <!-- Bubbles.ai Assistant -->
           <li 
             class="nav-item primary-nav-item" 
             :class="{ 'active': viewMode === 'chat' }"
@@ -150,14 +149,8 @@ function setSelectedDateKey(date: string) {
               <span>Bubbles.ai</span>
             </div>
           </li>
-        </ul>
-      </div>
 
-      <div class="nav-divider"></div>
-
-      <!-- Inbox (Classic) Section (strictly below Bubbles.ai) -->
-      <div class="nav-section">
-        <ul class="nav-list">
+          <!-- Inbox (Classic Email Feed) -->
           <li 
             class="nav-item primary-nav-item" 
             :class="{ 'active': viewMode === 'inbox' }"

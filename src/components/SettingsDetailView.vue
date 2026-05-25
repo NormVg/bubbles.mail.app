@@ -59,7 +59,7 @@ function saveAllSettings() {
 </script>
 
 <template>
-  <div class="settings-detail animate-fade-in">
+  <div class="pane pane-right settings-detail animate-fade-in">
     <!-- Header -->
     <div class="pane-header detail-header">
       <h2 class="pane-title">Configure Bubbles</h2>

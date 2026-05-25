@@ -20,7 +20,7 @@ function selectCategory(id: string) {
 </script>
 
 <template>
-  <div class="settings-sidebar animate-fade-in">
+  <div class="pane pane-middle settings-sidebar animate-fade-in">
     <!-- Header -->
     <div class="pane-header settings-header">
       <h2 class="pane-title">Settings</h2>

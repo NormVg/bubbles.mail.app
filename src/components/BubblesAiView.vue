@@ -5,12 +5,12 @@ import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
 
 const { selectedEmail } = useMail()
-const { 
-  sessions, 
-  currentSessionId, 
-  messages, 
-  isThinking, 
-  sendMessage 
+const {
+  sessions,
+  currentSessionId,
+  messages,
+  isThinking,
+  sendMessage
 } = useAiAssistant()
 
 const inputMessage = ref('')
@@ -42,20 +42,20 @@ function scrollToBottom() {
 
 function handleSend() {
   if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
-  
+
   let formattedText = inputMessage.value.trim()
-  
+
   if (attachedFiles.value.length > 0) {
     const fileNames = attachedFiles.value.map(f => `"${f.name}" (${f.size})`).join(', ')
     const prefix = formattedText ? `${formattedText}\n\n` : ''
     formattedText = `${prefix}📎 Attached files: ${fileNames}`
   }
-  
+
   sendMessage(formattedText, selectedEmail.value)
   inputMessage.value = ''
   attachedFiles.value = []
   scrollToBottom()
-  
+
   // Reset textarea height
   nextTick(() => {
     if (chatTextareaRef.value) {
@@ -131,12 +131,12 @@ onMounted(() => {
       <!-- Centered Double-Box Input -->
       <div class="centered-composer-wrapper">
         <!-- Hidden file input -->
-        <input 
-          type="file" 
-          ref="fileInputRef" 
-          multiple 
-          @change="handleFileChange" 
-          style="display: none" 
+        <input
+          type="file"
+          ref="fileInputRef"
+          multiple
+          @change="handleFileChange"
+          style="display: none"
         />
 
         <div class="double-box-outer">
@@ -154,10 +154,10 @@ onMounted(() => {
             </div>
 
             <!-- Textarea -->
-            <textarea 
+            <textarea
               ref="chatTextareaRef"
-              v-model="inputMessage" 
-              placeholder="Dump you mind, let me manage" 
+              v-model="inputMessage"
+              placeholder="Dump you mind, let me manage"
               class="chat-textarea"
               rows="1"
               @input="adjustTextareaHeight"
@@ -174,8 +174,8 @@ onMounted(() => {
                   <Mic :size="15" />
                 </button>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="card-send-btn flex-center"
                 :disabled="!inputMessage.trim() && attachedFiles.length === 0"
                 @click="handleSend"
@@ -199,9 +199,9 @@ onMounted(() => {
 
       <!-- Messages Viewport -->
       <div class="chat-messages" ref="messageContainer">
-        <div 
-          v-for="msg in messages" 
-          :key="msg.id" 
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
           class="message-wrapper"
           :class="msg.sender"
         >
@@ -218,7 +218,7 @@ onMounted(() => {
             <div class="user-msg-text" v-html="formatMessageText(msg.text)"></div>
           </div>
         </div>
-        
+
         <!-- Thinking indicator -->
         <div v-if="isThinking" class="message-wrapper ai">
           <div class="ai-response thinking">
@@ -237,9 +237,9 @@ onMounted(() => {
       <!-- suggestion chips sitting at bottom -->
       <div class="suggestions-bar" v-if="!isThinking">
         <div class="suggestions-scroll">
-          <button 
-            v-for="chip in ['How does today look?', 'Show my highest priority tasks', 'Summarize this week\'s budget discussion']" 
-            :key="chip" 
+          <button
+            v-for="chip in ['How does today look?', 'Show my highest priority tasks', 'Summarize this week\'s budget discussion']"
+            :key="chip"
             class="suggestion-chip"
             @click="selectSuggestion(chip)"
           >
@@ -250,12 +250,12 @@ onMounted(() => {
 
       <!-- Bottom Composer docked -->
       <div class="chat-input-area">
-        <input 
-          type="file" 
-          ref="fileInputRef" 
-          multiple 
-          @change="handleFileChange" 
-          style="display: none" 
+        <input
+          type="file"
+          ref="fileInputRef"
+          multiple
+          @change="handleFileChange"
+          style="display: none"
         />
 
         <div class="double-box-outer">
@@ -270,10 +270,10 @@ onMounted(() => {
               </div>
             </div>
 
-            <textarea 
+            <textarea
               ref="chatTextareaRef"
-              v-model="inputMessage" 
-              placeholder="Dump you mind, let me manage" 
+              v-model="inputMessage"
+              placeholder="Dump you mind, let me manage"
               class="chat-textarea"
               rows="1"
               @input="adjustTextareaHeight"
@@ -289,8 +289,8 @@ onMounted(() => {
                   <Mic :size="15" />
                 </button>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="card-send-btn flex-center"
                 :disabled="!inputMessage.trim() && attachedFiles.length === 0"
                 @click="handleSend"
@@ -341,7 +341,8 @@ onMounted(() => {
   right: 0;
   bottom: 0;
   opacity: 0.85;
-  background-image: url('/deter-bg.jpg');
+  background-image: url('/deter-bg.png');
+
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

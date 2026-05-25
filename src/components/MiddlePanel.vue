@@ -23,7 +23,7 @@ function handleSearchInput(event: Event) {
       </div>
       
       <!-- Right Side Context Date Display -->
-      <div class="timeline-day-context">
+      <div class="timeline-day-context" v-if="viewMode === 'digest'">
         {{ selectedReport.dateKey }}
       </div>
     </div>
