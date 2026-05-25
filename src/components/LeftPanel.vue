@@ -33,6 +33,7 @@ function toggleTheme() {
 
 function setSelectedDateKey(date: string) {
   setDateKey(date)
+  setViewMode('digest')
   // Wait for computed filteredEmails to update, then select first email
   setTimeout(() => {
     const firstMail = filteredEmails.value[0]
@@ -86,24 +87,6 @@ function setSelectedDateKey(date: string) {
     <!-- Sidebar Main Scrolling Navigation -->
     <div class="sidebar-scrollable-content">
 
-      <!-- Primary App Sections (Dedicated Inbox) -->
-      <div class="nav-section primary-sections">
-        <ul class="nav-list">
-          <li 
-            class="nav-item primary-nav-item" 
-            :class="{ 'active': viewMode === 'inbox' || viewMode === 'digest' }"
-            @click="setViewMode('digest')"
-          >
-            <div class="nav-item-left">
-              <Inbox :size="15" class="nav-icon" />
-              <span>Inbox</span>
-            </div>
-          </li>
-        </ul>
-      </div>
-
-      <div class="nav-divider"></div>
-
       <!-- Timeline Navigation Section -->
       <div class="nav-section">
         <h3 class="section-uppercase-title">Timeline</h3>
@@ -112,7 +95,7 @@ function setSelectedDateKey(date: string) {
           <!-- Today -->
           <li
             class="nav-item timeline-item"
-            :class="{ 'active': selectedDateKey === 'Today' }"
+            :class="{ 'active': viewMode === 'digest' && selectedDateKey === 'Today' }"
             @click="setSelectedDateKey('Today')"
           >
             <div class="nav-item-left">
@@ -125,7 +108,7 @@ function setSelectedDateKey(date: string) {
           <!-- Yesterday -->
           <li
             class="nav-item timeline-item"
-            :class="{ 'active': selectedDateKey === 'Yesterday' }"
+            :class="{ 'active': viewMode === 'digest' && selectedDateKey === 'Yesterday' }"
             @click="setSelectedDateKey('Yesterday')"
           >
             <div class="nav-item-left">
@@ -140,7 +123,7 @@ function setSelectedDateKey(date: string) {
             v-for="date in ['Thu, Apr 23', 'Wed, Apr 22', 'Tue, Apr 21', 'Mon, Apr 20', 'Sun, Apr 19']"
             :key="date"
             class="nav-item timeline-item"
-            :class="{ 'active': selectedDateKey === date }"
+            :class="{ 'active': viewMode === 'digest' && selectedDateKey === date }"
             @click="setSelectedDateKey(date)"
           >
             <div class="nav-item-left">
@@ -165,6 +148,24 @@ function setSelectedDateKey(date: string) {
             <div class="nav-item-left">
               <Sparkles :size="15" class="nav-icon" />
               <span>Bubbles.ai</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="nav-divider"></div>
+
+      <!-- Inbox (Classic) Section (strictly below Bubbles.ai) -->
+      <div class="nav-section">
+        <ul class="nav-list">
+          <li 
+            class="nav-item primary-nav-item" 
+            :class="{ 'active': viewMode === 'inbox' }"
+            @click="setViewMode('inbox')"
+          >
+            <div class="nav-item-left">
+              <Inbox :size="15" class="nav-icon" />
+              <span>Inbox</span>
             </div>
           </li>
         </ul>

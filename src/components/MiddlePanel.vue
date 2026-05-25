@@ -14,25 +14,12 @@ function handleSearchInput(event: Event) {
 
 <template>
   <section class="pane pane-middle">
-    <!-- Header: Switch between Intelligence and raw Emails for the selected day -->
+    <!-- Header: Classic layout with static title depending on active page context -->
     <div class="pane-header middle-header">
-      <div class="view-mode-tabs">
-        <button 
-          class="mode-tab-btn" 
-          :class="{ 'active': viewMode === 'digest' }"
-          @click="setViewMode('digest')"
-        >
-          <Sparkles :size="14" />
-          Intelligence
-        </button>
-        <button 
-          class="mode-tab-btn" 
-          :class="{ 'active': viewMode === 'inbox' }"
-          @click="setViewMode('inbox')"
-        >
-          <Inbox :size="14" />
-          Emails
-        </button>
+      <div class="pane-title flex-center gap-6" style="display: flex; align-items: center; gap: 8px;">
+        <Sparkles v-if="viewMode === 'digest'" :size="15" style="color: var(--text-secondary);" />
+        <Inbox v-else-if="viewMode === 'inbox'" :size="15" style="color: var(--text-secondary);" />
+        <span class="header-title-text" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">{{ viewMode === 'digest' ? 'Intelligence' : 'Inbox' }}</span>
       </div>
       
       <!-- Right Side Context Date Display -->
