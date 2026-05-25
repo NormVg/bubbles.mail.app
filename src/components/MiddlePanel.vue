@@ -3,8 +3,8 @@ import { Sparkles, Inbox } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 
-const { viewMode, setViewMode, activeTab, setActiveTab, searchQuery, setSearchQuery } = useMail()
-const { selectedReport } = useDailyDigest()
+const { viewMode, setViewMode, searchQuery, setSearchQuery } = useMail()
+const { selectedReport, selectedDateKey } = useDailyDigest()
 
 function handleSearchInput(event: Event) {
   const target = event.target as HTMLInputElement
@@ -22,9 +22,31 @@ function handleSearchInput(event: Event) {
         <span class="header-title-text" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">{{ viewMode === 'digest' ? 'Intelligence' : 'Inbox' }}</span>
       </div>
       
-      <!-- Right Side Context Date Display -->
-      <div class="timeline-day-context" v-if="viewMode === 'digest'">
-        {{ selectedReport.dateKey }}
+      <!-- Right Side Day Actions -->
+      <div class="header-right-actions" style="display: flex; align-items: center; gap: 8px;">
+        <!-- If in Daily Digest, show date context and option to see raw emails -->
+        <template v-if="viewMode === 'digest'">
+          <span class="timeline-day-context">{{ selectedReport.dateKey }}</span>
+          <button 
+            class="header-toggle-mode-btn"
+            @click="setViewMode('inbox')"
+            title="Switch to raw emails for this day"
+          >
+            View emails
+          </button>
+        </template>
+        
+        <!-- If in Inbox and a timeline date is selected, show option to view AI Digest -->
+        <template v-else-if="viewMode === 'inbox' && selectedDateKey">
+          <span class="timeline-day-context">{{ selectedDateKey }}</span>
+          <button 
+            class="header-toggle-mode-btn"
+            @click="setViewMode('digest')"
+            title="Switch to AI Daily Digest for this day"
+          >
+            View digest
+          </button>
+        </template>
       </div>
     </div>
 
@@ -179,5 +201,24 @@ function handleSearchInput(event: Event) {
   flex: 1;
   overflow-y: auto;
   background-color: var(--bg-primary);
+}
+
+.header-toggle-mode-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.header-toggle-mode-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 </style>

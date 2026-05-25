@@ -287,7 +287,7 @@ export function useMail() {
       }
 
       // New: Filter by active date key context (Today, Yesterday, Thu, Apr 23 etc.)
-      if (viewMode.value === 'digest' && selectedDateKey.value && email.dateKey !== selectedDateKey.value) {
+      if (selectedDateKey.value && email.dateKey !== selectedDateKey.value) {
         return false
       }
 

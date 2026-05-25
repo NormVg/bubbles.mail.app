@@ -33,7 +33,19 @@ function toggleTheme() {
 
 function setSelectedDateKey(date: string) {
   setDateKey(date)
-  setViewMode('digest')
+  if (viewMode.value !== 'inbox') {
+    setViewMode('digest')
+  }
+  // Wait for computed filteredEmails to update, then select first email
+  setTimeout(() => {
+    const firstMail = filteredEmails.value[0]
+    setSelectedEmailId(firstMail ? firstMail.id : null)
+  }, 0)
+}
+
+function handleInboxClick() {
+  setViewMode('inbox')
+  setDateKey('')
   // Wait for computed filteredEmails to update, then select first email
   setTimeout(() => {
     const firstMail = filteredEmails.value[0]
@@ -153,8 +165,8 @@ function setSelectedDateKey(date: string) {
           <!-- Inbox (Classic Email Feed) -->
           <li 
             class="nav-item primary-nav-item" 
-            :class="{ 'active': viewMode === 'inbox' }"
-            @click="setViewMode('inbox')"
+            :class="{ 'active': viewMode === 'inbox' && !selectedDateKey }"
+            @click="handleInboxClick"
           >
             <div class="nav-item-left">
               <Inbox :size="15" class="nav-icon" />
