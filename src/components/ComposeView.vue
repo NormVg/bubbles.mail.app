@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import {
-  X, Send, Paperclip, Bold, Italic, Underline, List,
+  Send, Paperclip, Bold, Italic, Underline, List,
   ListOrdered, Link, Trash2, FileText, ChevronDown, Sparkles, Check, RefreshCw
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
@@ -182,15 +182,13 @@ function loadDraft(draft: SavedDraft) {
   showDraftsDropdown.value = false
 }
 
-// ─── Bubbles AI Copilot State ────────────────────────────────────────────────
-const showAiPanel = ref(true)
+// ─── Bubbles AI Inline Assistant State ───────────────────────────────────────
+const showAiWidget = ref(true) // Display by default below the body
 const aiActiveTab = ref<'scratch' | 'refine'>('scratch')
 const aiPrompt = ref('')
 const aiTone = ref('professional')
 const isAiGenerating = ref(false)
 const aiStatusText = ref('Standing by')
-const aiResultSubject = ref('')
-const aiResultBody = ref('')
 
 const getSenderName = () => {
   if (fromAccount.value === 'thenormvg@gmail.com') return 'Norm'
@@ -208,6 +206,10 @@ const aiTemplates = [
 function selectTemplate(text: string) {
   aiPrompt.value = text
   generateAiDraft()
+}
+
+function toggleAiWidget() {
+  showAiWidget.value = !showAiWidget.value
 }
 
 function buildCustomDraft(prompt: string, tone: string) {
@@ -252,19 +254,16 @@ function generateAiDraft() {
   if (aiActiveTab.value === 'scratch' && !aiPrompt.value.trim()) return
   
   isAiGenerating.value = true
-  aiResultBody.value = ''
-  aiResultSubject.value = ''
+  aiStatusText.value = 'Scanning workspace...'
   
   const statusMessages = [
-    'Scanning workspace variables...',
-    'Formulating phrasing structure...',
-    'Injecting architectural vocabulary...',
-    'Perfecting structural flow...'
+    'Scanning details...',
+    'Consulting models...',
+    'Polishing phrasing...',
+    'Perfecting flow...'
   ]
   
   let msgIdx = 0
-  aiStatusText.value = statusMessages[msgIdx]
-  
   const statusInterval = setInterval(() => {
     msgIdx++
     if (msgIdx < statusMessages.length) {
@@ -307,27 +306,32 @@ function generateAiDraft() {
         finalBody = b
       }
       
-      typeText(finalBody, finalSubject)
+      typeTextDirectly(finalBody, finalSubject)
     }
   }, 350)
 }
 
 let typingInterval: NodeJS.Timeout | null = null
 
-function typeText(targetBody: string, targetSubject: string) {
+function typeTextDirectly(targetBody: string, targetSubject: string) {
   if (typingInterval) clearInterval(typingInterval)
   
-  aiResultBody.value = ''
-  aiResultSubject.value = ''
-  aiStatusText.value = 'Streaming draft...'
+  if (bodyRef.value) {
+    bodyRef.value.innerText = ''
+    bodyIsEmpty.value = false
+  }
+  if (targetSubject) {
+    subject.value = ''
+  }
   
+  aiStatusText.value = 'Streaming draft...'
   let bodyIdx = 0
   let subjectIdx = 0
   
   if (targetSubject) {
     const sInt = setInterval(() => {
       if (subjectIdx < targetSubject.length) {
-        aiResultSubject.value += targetSubject[subjectIdx]
+        subject.value += targetSubject[subjectIdx]
         subjectIdx++
       } else {
         clearInterval(sInt)
@@ -340,26 +344,17 @@ function typeText(targetBody: string, targetSubject: string) {
 
   function startBodyStreaming() {
     typingInterval = setInterval(() => {
-      if (bodyIdx < targetBody.length) {
+      if (bodyRef.value && bodyIdx < targetBody.length) {
         const chunk = targetBody.slice(bodyIdx, bodyIdx + 5)
-        aiResultBody.value += chunk
+        bodyRef.value.innerText += chunk
         bodyIdx += chunk.length
       } else {
         if (typingInterval) clearInterval(typingInterval)
         isAiGenerating.value = false
-        aiStatusText.value = 'Draft complete!'
+        aiStatusText.value = 'Standing by'
+        aiPrompt.value = ''
       }
     }, 12)
-  }
-}
-
-function applyAiDraft() {
-  if (bodyRef.value) {
-    bodyRef.value.innerText = aiResultBody.value
-    bodyIsEmpty.value = false
-  }
-  if (aiResultSubject.value) {
-    subject.value = aiResultSubject.value
   }
 }
 </script>
@@ -367,15 +362,14 @@ function applyAiDraft() {
 <template>
   <section class="pane pane-right compose-root">
 
-    <!-- ── Top Bar ──────────────────────────────────────────────────────────── -->
-    <div class="compose-topbar">
-      <div class="compose-topbar-left">
-        <!-- Cross Button Removed as Requested -->
-        <span class="compose-title">New Email</span>
+    <!-- ── Header (Matching pane-header aesthetic) ─────────────────────────── -->
+    <div class="pane-header compose-header">
+      <div class="header-left">
+        <span class="pane-title">New Email</span>
         
-        <!-- Interactive Saved Drafts Button with Dropdown -->
+        <!-- Saved Drafts Trigger Dropdown -->
         <div class="drafts-dropdown-wrapper">
-          <button class="view-drafts-topbar-btn" @click="showDraftsDropdown = !showDraftsDropdown">
+          <button class="view-toggle-btn secondary drafts-trigger-btn" @click="showDraftsDropdown = !showDraftsDropdown">
             <FileText :size="13" />
             <span>Saved Drafts</span>
             <ChevronDown :size="12" class="dropdown-chevron" />
@@ -406,25 +400,25 @@ function applyAiDraft() {
         </div>
       </div>
 
-      <div class="compose-topbar-right">
-        <span v-if="draftSaved" class="draft-saved-label">
+      <div class="header-right">
+        <span v-if="draftSaved" class="draft-saved-label animate-fade-in">
           <FileText :size="12" /> Draft saved
         </span>
         
-        <!-- Premium AI Sidebar Toggle Button -->
+        <!-- Premium AI Trigger Button matching Email Details look -->
         <button 
-          class="ai-toggle-topbar-btn" 
-          :class="{ 'active': showAiPanel }"
-          @click="showAiPanel = !showAiPanel"
+          class="view-toggle-btn ai-toggle-header-btn" 
+          :class="showAiWidget ? 'accent active' : 'secondary'"
+          @click="toggleAiWidget"
           title="Toggle Bubbles.ai Copilot"
         >
-          <Sparkles :size="14" class="sparkle-icon" />
+          <Sparkles :size="13" class="sparkle-icon" />
           <span>Bubbles.ai</span>
         </button>
       </div>
     </div>
 
-    <!-- ── Compose Sheet Splitted Layout ────────────────────────────────────── -->
+    <!-- ── Compose Sheet Full-Width Layout ──────────────────────────────────── -->
     <div class="compose-sheet-wrapper">
       
       <!-- MAIN EMAIL SHEET -->
@@ -582,6 +576,81 @@ function applyAiDraft() {
           <span v-if="bodyIsEmpty" class="body-placeholder">Write your message here…</span>
         </div>
 
+        <!-- CONTEXTUAL INLINE AI COPILOT WIDGET (Email Detail Layout Style, Emojiless) -->
+        <Transition name="widget-slide">
+          <div v-if="showAiWidget" class="ai-inline-widget">
+            
+            <!-- Quick Actions Prompt Templates -->
+            <div class="ai-widget-section">
+              <div class="ai-widget-templates">
+                <button
+                  v-for="tpl in aiTemplates"
+                  :key="tpl.label"
+                  class="ai-tpl-chip"
+                  @click="selectTemplate(tpl.text)"
+                  :disabled="isAiGenerating"
+                >
+                  {{ tpl.label }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Double-box design matching EmailDetail instructions area -->
+            <div class="ai-double-box-outer" :class="{ 'is-thinking': isAiGenerating }">
+              <div class="ai-input-card">
+                <!-- Textarea -->
+                <textarea
+                  v-model="aiPrompt"
+                  class="ai-widget-prompt-input"
+                  placeholder="Dump your mind, let me manage"
+                  :disabled="isAiGenerating"
+                />
+
+                <!-- Card toolbar action row -->
+                <div class="ai-card-toolbar-row">
+                  <div class="ai-toolbar-left">
+                    <div class="ai-tone-chips-list">
+                      <button 
+                        v-for="tone in ['professional', 'friendly', 'direct', 'persuasive']"
+                        :key="tone"
+                        class="ai-tone-chip"
+                        :class="{ 'active': aiTone === tone }"
+                        @click="aiTone = tone"
+                        :disabled="isAiGenerating"
+                      >
+                        {{ tone.charAt(0).toUpperCase() + tone.slice(1) }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="ai-toolbar-right">
+                    <!-- Action select tab -->
+                    <select v-model="aiActiveTab" class="ai-tab-select" :disabled="isAiGenerating">
+                      <option value="scratch">Write New Draft</option>
+                      <option value="refine">Refine Current Email</option>
+                    </select>
+
+                    <!-- Generate button -->
+                    <button 
+                      class="ai-widget-generate-btn" 
+                      @click="generateAiDraft"
+                      :disabled="isAiGenerating || (aiActiveTab === 'scratch' && !aiPrompt.trim())"
+                    >
+                      <RefreshCw v-if="isAiGenerating" :size="12" class="spin-icon" />
+                      <Sparkles v-else :size="12" />
+                      <span>{{ isAiGenerating ? aiStatusText : 'Auto-draft' }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <p class="copywriting-hint">
+              Your context above is a guide. AI will generate a professional draft directly in the email editor for you to review and edit before sending.
+            </p>
+          </div>
+        </Transition>
+
         <!-- ATTACHMENTS -->
         <div v-if="attachments.length" class="attachments-list">
           <div v-for="name in attachments" :key="name" class="attachment-chip">
@@ -616,148 +685,6 @@ function applyAiDraft() {
 
       </div>
 
-      <!-- BUBBLES AI COPILOT SIDEBAR -->
-      <Transition name="panel-slide">
-        <div v-if="showAiPanel" class="ai-copilot-pane">
-          
-          <!-- AI Header -->
-          <div class="ai-pane-header">
-            <div class="ai-header-left">
-              <Sparkles class="ai-glowing-icon" :size="15" />
-              <span class="ai-pane-title">Bubbles.ai Copilot</span>
-            </div>
-            <div class="ai-header-right">
-              <span class="ai-pulse-dot" />
-              <button class="ai-close-btn" @click="showAiPanel = false">
-                <X :size="13" />
-              </button>
-            </div>
-          </div>
-
-          <!-- AI Navigation Tabs -->
-          <div class="ai-tabs-row">
-            <button 
-              class="ai-tab-btn" 
-              :class="{ 'active': aiActiveTab === 'scratch' }"
-              @click="aiActiveTab = 'scratch'"
-            >
-              Write Draft
-            </button>
-            <button 
-              class="ai-tab-btn" 
-              :class="{ 'active': aiActiveTab === 'refine' }"
-              @click="aiActiveTab = 'refine'"
-            >
-              Refine Phrasing
-            </button>
-          </div>
-
-          <!-- Scrolling AI Body Container -->
-          <div class="ai-pane-scroll-container">
-            
-            <!-- Quick Actions Prompt Templates (Only for Scratch tab) -->
-            <div v-if="aiActiveTab === 'scratch'" class="ai-section">
-              <h4 class="ai-section-title">Quick Action Scenarios</h4>
-              <div class="ai-template-grid">
-                <button
-                  v-for="tpl in aiTemplates"
-                  :key="tpl.label"
-                  class="ai-template-chip"
-                  @click="selectTemplate(tpl.text)"
-                  :disabled="isAiGenerating"
-                >
-                  ✨ {{ tpl.label }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Main Input Prompt -->
-            <div class="ai-section">
-              <h4 class="ai-section-title">
-                {{ aiActiveTab === 'scratch' ? 'Tell AI what to write' : 'Select desired adjustment' }}
-              </h4>
-              
-              <textarea
-                v-if="aiActiveTab === 'scratch'"
-                v-model="aiPrompt"
-                class="ai-prompt-input"
-                placeholder="Example: Propose meeting at 2 PM to sync on build progress..."
-                :disabled="isAiGenerating"
-              />
-              
-              <div v-else class="ai-refine-info-card">
-                <Sparkles :size="13" class="glow-info-icon" />
-                <span>Refining will format your current email body text below to match the selected tone.</span>
-              </div>
-            </div>
-
-            <!-- AI Tone Selectors -->
-            <div class="ai-section">
-              <h4 class="ai-section-title">Select Phrasing Tone</h4>
-              <div class="ai-tone-chips-row">
-                <button 
-                  v-for="tone in ['professional', 'friendly', 'direct', 'persuasive']"
-                  :key="tone"
-                  class="ai-tone-chip"
-                  :class="{ 'active': aiTone === tone }"
-                  @click="aiTone = tone"
-                  :disabled="isAiGenerating"
-                >
-                  {{ tone.charAt(0).toUpperCase() + tone.slice(1) }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Generate Action Button -->
-            <div class="ai-generate-wrapper">
-              <button 
-                class="ai-generate-btn" 
-                :class="{ 'generating': isAiGenerating }"
-                @click="generateAiDraft"
-                :disabled="isAiGenerating || (aiActiveTab === 'scratch' && !aiPrompt.trim())"
-              >
-                <RefreshCw v-if="isAiGenerating" :size="13" class="spin-icon" />
-                <Sparkles v-else :size="13" />
-                <span>{{ isAiGenerating ? 'Drafting...' : 'Generate AI Copy' }}</span>
-              </button>
-            </div>
-
-            <!-- Generated AI Draft Results Panel -->
-            <div v-if="aiResultBody || isAiGenerating" class="ai-result-section">
-              <div class="ai-result-header">
-                <span class="ai-result-label">Generated Suggestion</span>
-                <span class="ai-status-pill" :class="{ 'thinking': isAiGenerating }">
-                  {{ aiStatusText }}
-                </span>
-              </div>
-
-              <!-- AI Results Box -->
-              <div class="ai-result-box">
-                <div v-if="aiResultSubject" class="ai-result-subject-row">
-                  <span class="res-sub-lbl">Subject:</span>
-                  <span class="res-sub-val">{{ aiResultSubject }}</span>
-                </div>
-                <div class="ai-result-body-content">{{ aiResultBody }}</div>
-              </div>
-
-              <!-- AI Application Controls -->
-              <div class="ai-apply-row">
-                <button 
-                  class="ai-apply-btn" 
-                  @click="applyAiDraft"
-                  :disabled="isAiGenerating"
-                >
-                  <Check :size="13" />
-                  <span>Insert into Email</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      </Transition>
-
     </div>
 
   </section>
@@ -769,94 +696,106 @@ function applyAiDraft() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   overflow: hidden;
 }
 
-/* ── Top bar ─────────────────────────────────────────────────────────────── */
-.compose-topbar {
+/* ── Top bar Header ──────────────────────────────────────────────────────── */
+.compose-header {
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 56px;
-  flex-shrink: 0;
-  background: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  flex-shrink: 0;
+  padding: 0 16px;
 }
 
-.compose-topbar-left {
+.header-left {
   display: flex;
   align-items: center;
-  position: relative;
+  gap: 12px;
 }
 
-.compose-topbar-right {
+.header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.compose-title {
-  font-family: var(--font-title);
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* ── Saved Drafts Button & Dropdown Styles ── */
-.drafts-dropdown-wrapper {
-  position: relative;
-}
-
-.view-drafts-topbar-btn {
+/* Standardized Header view-toggle-btn pattern */
+.view-toggle-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  border-radius: 14px;
   font-family: var(--font-sans);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 550;
   cursor: pointer;
-  margin-left: 14px;
   transition: all var(--transition-fast);
+  user-select: none;
 }
 
-.view-drafts-topbar-btn:hover {
+.view-toggle-btn.secondary {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.view-toggle-btn.secondary:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border-color: var(--text-muted);
 }
 
+.view-toggle-btn.accent {
+  background: var(--active-bg);
+  border: 1px solid var(--border-color);
+  color: var(--active-text);
+  font-weight: 600;
+}
+
+.view-toggle-btn.accent:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Saved Drafts Trigger Specifics */
+.drafts-dropdown-wrapper {
+  position: relative;
+}
+
+.drafts-trigger-btn {
+  margin-left: 4px;
+}
+
 .dropdown-chevron {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   opacity: 0.7;
 }
 
 .drafts-dropdown {
   position: absolute;
   top: calc(100% + 6px);
-  left: 14px;
+  left: 4px;
   z-index: 100;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   min-width: 320px;
   max-width: 360px;
 }
 
 .drafts-dropdown-header {
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-family: var(--font-sans);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -864,13 +803,13 @@ function applyAiDraft() {
 }
 
 .draft-option {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   transition: background var(--transition-fast);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .draft-option:last-child {
@@ -882,7 +821,7 @@ function applyAiDraft() {
 }
 
 .draft-option-title {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -894,7 +833,7 @@ function applyAiDraft() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   gap: 12px;
 }
@@ -912,8 +851,8 @@ function applyAiDraft() {
 }
 
 .empty-drafts {
-  padding: 16px;
-  font-size: 0.8rem;
+  padding: 14px;
+  font-size: 0.78rem;
   color: var(--text-muted);
   text-align: center;
   cursor: default;
@@ -928,71 +867,29 @@ function applyAiDraft() {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  animation: fadeInOut 2s ease forwards;
-}
-@keyframes fadeInOut {
-  0%   { opacity: 0; transform: translateY(4px); }
-  15%  { opacity: 1; transform: translateY(0); }
-  80%  { opacity: 1; }
-  100% { opacity: 0; }
 }
 
-.ai-toggle-topbar-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 18px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+.ai-toggle-header-btn.active {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
 }
 
-.ai-toggle-topbar-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.ai-toggle-topbar-btn.active {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border-color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.ai-toggle-topbar-btn.active .sparkle-icon {
-  animation: pulse-sparkle 2s infinite ease-in-out;
-}
-
-@keyframes pulse-sparkle {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.2); opacity: 0.8; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* ── Split Layout Wrapper ────────────────────────────────────────────────── */
+/* ── Split Layout Wrapper (Flat architecture, flush edge-to-edge) ─────────── */
 .compose-sheet-wrapper {
   flex: 1;
   overflow: hidden;
-  padding: 20px 20px;
+  padding: 0; /* Flush edge-to-edge! */
   display: flex;
-  gap: 20px;
   height: calc(100% - 56px);
+  background: var(--bg-primary);
 }
 
 .compose-sheet {
   background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
+  border: none;
+  border-radius: 0; /* Flat! */
+  box-shadow: none; /* Flat! */
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1001,31 +898,34 @@ function applyAiDraft() {
   overflow-y: auto;
 }
 
-/* ── Field rows ──────────────────────────────────────────────────────────── */
+/* ── Field rows (Stretched & Aligned edge-to-edge) ───────────────────────── */
 .field-divider {
   height: 1px;
   background: var(--border-color);
-  margin: 0 16px;
+  margin: 0; /* Fully horizontal span! */
+  opacity: 0.8;
 }
 
 .field-row {
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  min-height: 46px;
-  gap: 10px;
+  padding: 0 24px; /* Matches editor indentation */
+  min-height: 48px;
+  gap: 12px;
   position: relative;
+  background: var(--bg-primary);
 }
 
 .field-label {
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 550;
   color: var(--text-muted);
   flex-shrink: 0;
-  width: 46px;
+  width: 52px;
 }
 
-/* ── From selector ───────────────────────────────────────────────────────── */
+/* From selector dropdown dropdown */
 .from-selector {
   display: flex;
   align-items: center;
@@ -1033,18 +933,19 @@ function applyAiDraft() {
   cursor: pointer;
   position: relative;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: background var(--transition-fast);
   user-select: none;
+  margin-left: -4px;
 }
 .from-selector:hover { background: var(--bg-secondary); }
 
 .from-email {
   font-size: 0.83rem;
-  font-weight: 500;
+  font-weight: 555;
   color: var(--text-primary);
 }
-.from-chevron { color: var(--text-muted); }
+.from-chevron { color: var(--text-secondary); opacity: 0.8; }
 
 .from-dropdown {
   position: absolute;
@@ -1053,15 +954,15 @@ function applyAiDraft() {
   z-index: 100;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
   overflow: hidden;
   min-width: 240px;
 }
 
 .from-option {
-  padding: 10px 14px;
-  font-size: 0.82rem;
+  padding: 8px 12px;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
@@ -1069,7 +970,7 @@ function applyAiDraft() {
 .from-option:hover { background: var(--bg-secondary); color: var(--text-primary); }
 .from-option.active { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 500; }
 
-/* ── Chips ───────────────────────────────────────────────────────────────── */
+/* Recipient input chips */
 .chip-row { flex-wrap: wrap; align-items: flex-start; padding-top: 8px; padding-bottom: 8px; }
 
 .chips-input-area {
@@ -1079,7 +980,7 @@ function applyAiDraft() {
   gap: 5px;
   flex: 1;
   cursor: text;
-  min-height: 30px;
+  min-height: 32px;
 }
 
 .chips-list {
@@ -1092,9 +993,9 @@ function applyAiDraft() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 10px;
-  border-radius: 20px;
-  background: var(--bg-tertiary);
+  padding: 3px 8px;
+  border-radius: 6px; /* Architectural rectangular */
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   font-size: 0.78rem;
   font-weight: 500;
@@ -1102,9 +1003,9 @@ function applyAiDraft() {
   transition: all var(--transition-fast);
 }
 .chip-invalid {
-  background: hsl(0, 80%, 96%);
-  border-color: hsl(0, 80%, 85%);
-  color: hsl(0, 65%, 45%);
+  background: hsl(0, 80%, 98%);
+  border-color: hsl(0, 80%, 90%);
+  color: hsl(0, 70%, 45%);
 }
 
 .chip-remove {
@@ -1116,8 +1017,8 @@ function applyAiDraft() {
   cursor: pointer;
   color: var(--text-muted);
   padding: 1px;
-  border-radius: 50%;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  border-radius: 4px;
+  transition: all var(--transition-fast);
 }
 .chip-remove:hover { color: var(--text-primary); background: var(--border-color); }
 
@@ -1137,15 +1038,16 @@ function applyAiDraft() {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  align-self: center;
 }
 .cc-toggle-btn {
-  padding: 3px 9px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
   border: 1px solid var(--border-color);
   background: transparent;
-  font-size: 0.73rem;
+  font-size: 0.7rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
   display: flex;
@@ -1154,7 +1056,7 @@ function applyAiDraft() {
 .cc-toggle-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
 .close-cc { border-color: transparent; }
 
-/* ── Subject ─────────────────────────────────────────────────────────────── */
+/* Subject */
 .subject-input {
   flex: 1;
   border: none;
@@ -1162,28 +1064,29 @@ function applyAiDraft() {
   background: transparent;
   font-family: var(--font-sans);
   font-size: 0.88rem;
-  font-weight: 500;
+  font-weight: 555;
   color: var(--text-primary);
 }
 .subject-input::placeholder { color: var(--text-muted); font-weight: 400; }
 
-/* ── Formatting toolbar ──────────────────────────────────────────────────── */
+/* Formatting toolbar */
 .format-toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 12px;
+  gap: 3px;
+  padding: 8px 24px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  background: var(--bg-primary);
 }
 
 .fmt-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
-  border-radius: 6px;
+  width: 28px;
+  height: 26px;
+  border-radius: 4px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -1194,70 +1097,256 @@ function applyAiDraft() {
 
 .fmt-sep {
   width: 1px;
-  height: 18px;
+  height: 14px;
   background: var(--border-color);
   margin: 0 4px;
 }
 
-/* ── Body editor ─────────────────────────────────────────────────────────── */
+/* Body editor area */
 .body-wrapper {
   position: relative;
   flex: 1;
-  min-height: 220px;
+  min-height: 250px;
   display: flex;
   flex-direction: column;
 }
 
 .body-editor {
   flex: 1;
-  padding: 16px;
+  padding: 20px 24px;
   font-family: var(--font-sans);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   line-height: 1.7;
   color: var(--text-primary);
   outline: none;
-  min-height: 220px;
+  min-height: 250px;
 }
 
 .body-placeholder {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  font-size: 0.88rem;
+  top: 20px;
+  left: 24px;
+  font-size: 0.9rem;
   color: var(--text-muted);
   pointer-events: none;
   user-select: none;
 }
 
-/* ── Attachments ─────────────────────────────────────────────────────────── */
+/* ── CONTEXTUAL INLINE AI COPILOT WIDGET ────────────────────────────────── */
+.ai-inline-widget {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-widget-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-widget-sec-title {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.ai-widget-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-tpl-chip {
+  padding: 5px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px; /* Standard pill suggest chips look */
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.ai-tpl-chip:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+/* Double-box design matching EmailDetail instructions area */
+.ai-double-box-outer {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: border-color var(--transition-fast);
+}
+.ai-double-box-outer:focus-within {
+  border-color: var(--text-primary);
+}
+
+.ai-input-card {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.ai-widget-prompt-input {
+  width: 100%;
+  height: 48px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  resize: none;
+  line-height: 1.4;
+}
+.ai-widget-prompt-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ai-card-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.ai-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-tone-chips-list {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-tone-chip {
+  padding: 3px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.ai-tone-chip:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+.ai-tone-chip.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.ai-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-tab-select {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  outline: none;
+  cursor: pointer;
+}
+
+.ai-widget-generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.ai-widget-generate-btn:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+.ai-widget-generate-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.copywriting-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+  font-family: var(--font-sans);
+}
+
+.spin-icon {
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Attachments chips */
 .attachments-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 16px;
+  padding: 12px 24px;
   border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 .attachment-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 9px;
-  border-radius: 20px;
+  padding: 4px 8px;
+  border-radius: 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: var(--text-secondary);
 }
 
 .hidden-file-input { display: none; }
 
-/* ── Bottom bar ──────────────────────────────────────────────────────────── */
+/* Bottom bar action controls */
 .compose-bottom-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 12px 24px;
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
   gap: 8px;
@@ -1271,9 +1360,9 @@ function applyAiDraft() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -1284,7 +1373,7 @@ function applyAiDraft() {
 
 .bottom-btn.text-btn {
   width: auto;
-  padding: 0 12px;
+  padding: 0 10px;
   gap: 5px;
   font-family: var(--font-sans);
   font-size: 0.78rem;
@@ -1295,7 +1384,7 @@ function applyAiDraft() {
 
 .bottom-btn.discard-btn {
   width: auto;
-  padding: 0 12px;
+  padding: 0 10px;
   gap: 5px;
   font-family: var(--font-sans);
   font-size: 0.78rem;
@@ -1308,406 +1397,19 @@ function applyAiDraft() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 20px;
-  border-radius: 20px;
-  border: none;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  font-family: var(--font-sans);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-.send-btn-bottom:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
-.send-btn-bottom.sent { background: hsl(145, 50%, 42%); }
-
-/* ── BUBBLES AI COPILOT SIDEBAR ─────────────────────────────────────────── */
-.ai-copilot-pane {
-  width: 360px;
-  flex-shrink: 0;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  padding: 8px 18px;
   border-radius: 16px;
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-}
-
-/* AI Header */
-.ai-pane-header {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
-.ai-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-glowing-icon {
-  color: var(--text-primary);
-  animation: glow-animation 2.5s infinite ease-in-out;
-}
-
-@keyframes glow-animation {
-  0% { opacity: 0.8; transform: scale(0.98); }
-  50% { opacity: 1; transform: scale(1.05); filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.15)); }
-  100% { opacity: 0.8; transform: scale(0.98); }
-}
-
-.ai-pane-title {
-  font-family: var(--font-title);
-  font-size: 0.88rem;
-  font-weight: 650;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-}
-
-.ai-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-pulse-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: hsl(145, 60%, 45%);
-  box-shadow: 0 0 8px hsl(145, 65%, 45%);
-  animation: pulse-dot 1.8s infinite ease-in-out;
-}
-
-@keyframes pulse-dot {
-  0% { transform: scale(0.8); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(0.8); opacity: 0.5; }
-}
-
-.ai-close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
   border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.ai-close-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
-
-/* AI Navigation Tabs */
-.ai-tabs-row {
-  height: 38px;
-  display: flex;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  padding: 3px;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.ai-tab-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 0.76rem;
-  font-weight: 550;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all var(--transition-fast);
-}
-
-.ai-tab-btn:hover { color: var(--text-primary); }
-.ai-tab-btn.active {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-
-/* Scrolling Container */
-.ai-pane-scroll-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.ai-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ai-section-title {
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.03em;
-}
-
-/* Quick Action templates chips grid */
-.ai-template-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
-}
-
-.ai-template-chip {
-  padding: 8px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 0.74rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-align: left;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ai-template-chip:hover {
-  background: var(--bg-primary);
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-  transform: translateY(-0.5px);
-}
-
-/* Textarea input */
-.ai-prompt-input {
-  width: 100%;
-  height: 86px;
-  padding: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  outline: none;
-  resize: none;
-  line-height: 1.4;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-
-.ai-prompt-input:focus {
-  border-color: var(--text-muted);
-  background: var(--bg-primary);
-}
-
-.ai-refine-info-card {
-  display: flex;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-.glow-info-icon { color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
-
-/* Tone Chips list */
-.ai-tone-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.ai-tone-chip {
-  padding: 5px 12px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ai-tone-chip:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-.ai-tone-chip.active {
   background: var(--text-primary);
   color: var(--bg-primary);
-  border-color: var(--text-primary);
-}
-
-/* Action button */
-.ai-generate-wrapper {
-  margin-top: 4px;
-}
-
-.ai-generate-btn {
-  width: 100%;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border: none;
-  border-radius: 19px;
   font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
-
-.ai-generate-btn:hover:not(:disabled) {
-  opacity: 0.88;
-  transform: translateY(-0.5px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-
-.ai-generate-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.spin-icon {
-  animation: spin 1.2s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* AI Drafting results box */
-.ai-result-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px dashed var(--border-color);
-  padding-top: 16px;
-  margin-top: 4px;
-}
-
-.ai-result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.ai-result-label {
-  font-family: var(--font-sans);
-  font-size: 0.74rem;
-  font-weight: 650;
-  color: var(--text-primary);
-}
-
-.ai-status-pill {
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  transition: all var(--transition-fast);
-}
-
-.ai-status-pill.thinking {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  animation: pulse-pill 1.2s infinite ease-in-out;
-}
-
-@keyframes pulse-pill {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-}
-
-.ai-result-box {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.ai-result-subject-row {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.res-sub-lbl { color: var(--text-muted); }
-.res-sub-val { color: var(--text-primary); }
-
-.ai-result-body-content {
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  line-height: 1.6;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-}
-
-.ai-apply-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.ai-apply-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  font-family: var(--font-sans);
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ai-apply-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--text-muted);
-}
+.send-btn-bottom:hover { opacity: 0.9; transform: translateY(-0.5px); }
+.send-btn-bottom.sent { background: hsl(145, 50%, 42%); }
 
 /* ── Transitions ─────────────────────────────────────────────────────────── */
 .dropdown-enter-active, .dropdown-leave-active {
@@ -1727,13 +1429,11 @@ function applyAiDraft() {
 .field-slide-leave-active { transition: all 0.14s ease; }
 .field-slide-leave-to     { opacity: 0; }
 
-.panel-slide-enter-active, .panel-slide-leave-active {
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+.widget-slide-enter-active, .widget-slide-leave-active {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.panel-slide-enter-from, .panel-slide-leave-to {
+.widget-slide-enter-from, .widget-slide-leave-to {
   opacity: 0;
-  transform: translateX(12px);
-  width: 0px !important;
-  margin-left: -20px;
+  transform: translateY(8px);
 }
 </style>
