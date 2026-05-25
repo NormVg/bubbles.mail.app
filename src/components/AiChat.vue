@@ -19,6 +19,7 @@ const { messages, isThinking, getSuggestedActions, sendMessage } = useAiAssistan
 const inputMessage = ref('')
 const messageContainer = ref<HTMLElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const chatTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 // Attachment State
 interface AttachedFile {
@@ -41,6 +42,14 @@ function scrollToBottom() {
   })
 }
 
+function adjustTextareaHeight() {
+  const textarea = chatTextareaRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  // Auto-extend based on scroll height
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
+}
+
 function handleSend() {
   if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
   
@@ -57,6 +66,13 @@ function handleSend() {
   inputMessage.value = ''
   attachedFiles.value = [] // clear attached files
   scrollToBottom()
+  
+  // Reset height
+  nextTick(() => {
+    if (chatTextareaRef.value) {
+      chatTextareaRef.value.style.height = 'auto'
+    }
+  })
 }
 
 function selectSuggestion(suggestion: string) {
@@ -202,84 +218,87 @@ onMounted(() => {
         style="display: none" 
       />
 
-      <div class="chat-input-card" :class="{ 'is-recording': isRecording }">
-        <!-- Render Attached File Chips Inside the Card if any -->
-        <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
-          <div 
-            v-for="(file, i) in attachedFiles" 
-            :key="i" 
-            class="attached-chip"
-          >
-            <FileText :size="11" class="chip-file-icon" />
-            <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-            <span class="chip-file-size">{{ file.size }}</span>
-            <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-              <X :size="10" />
-            </button>
+      <div class="double-box-outer" :class="{ 'is-recording': isRecording }">
+        <div class="chat-input-card">
+          <!-- Render Attached File Chips Inside the Card if any -->
+          <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
+            <div 
+              v-for="(file, i) in attachedFiles" 
+              :key="i" 
+              class="attached-chip"
+            >
+              <FileText :size="11" class="chip-file-icon" />
+              <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
+              <span class="chip-file-size">{{ file.size }}</span>
+              <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
+                <X :size="10" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <!-- Input Textarea inside card -->
-        <textarea 
-          v-if="!isRecording"
-          v-model="inputMessage" 
-          placeholder="Dump you mind, let me manage" 
-          class="chat-textarea"
-          rows="1"
-          @keydown.enter.prevent="handleSend"
-          :disabled="isThinking"
-        ></textarea>
+          <!-- Input Textarea inside card -->
+          <textarea 
+            v-if="!isRecording"
+            ref="chatTextareaRef"
+            v-model="inputMessage" 
+            placeholder="Dump you mind, let me manage" 
+            class="chat-textarea"
+            rows="1"
+            @input="adjustTextareaHeight"
+            @keydown.enter.prevent="handleSend"
+            :disabled="isThinking"
+          ></textarea>
 
-        <!-- Dictating Waveform View Inside Card when Recording -->
-        <div v-else class="dictating-pulse-row animate-fade-in">
-          <span class="recording-pulsing-dot"></span>
-          <span class="dictating-status-text">Listening... Speak now</span>
-          <div class="mini-voice-wave flex-center">
-            <span class="wave-pillar p1"></span>
-            <span class="wave-pillar p2"></span>
-            <span class="wave-pillar p3"></span>
-            <span class="wave-pillar p4"></span>
+          <!-- Dictating Waveform View Inside Card when Recording -->
+          <div v-else class="dictating-pulse-row animate-fade-in">
+            <span class="recording-pulsing-dot"></span>
+            <span class="dictating-status-text">Listening... Speak now</span>
+            <div class="mini-voice-wave flex-center">
+              <span class="wave-pillar p1"></span>
+              <span class="wave-pillar p2"></span>
+              <span class="wave-pillar p3"></span>
+              <span class="wave-pillar p4"></span>
+            </div>
+            <button type="button" class="stop-dictate-btn" @click="stopVoiceDictation">Stop</button>
           </div>
-          <button type="button" class="stop-dictate-btn" @click="stopVoiceDictation">Stop</button>
-        </div>
 
-        <!-- Toolbar row at the bottom of the card -->
-        <div class="card-toolbar-row">
-          <div class="toolbar-left-actions">
-            <!-- Paperclip attachment button -->
+          <!-- Toolbar row at the bottom of the card -->
+          <div class="card-toolbar-row">
+            <div class="toolbar-left-actions">
+              <!-- Paperclip attachment button -->
+              <button 
+                type="button" 
+                class="toolbar-icon-btn flex-center" 
+                title="Attach files"
+                @click="triggerFileSelect"
+                :disabled="isThinking || isRecording"
+              >
+                <Paperclip :size="15" />
+              </button>
+
+              <!-- Microphone dictation button -->
+              <button 
+                type="button" 
+                class="toolbar-icon-btn flex-center" 
+                :class="{ 'recording-active': isRecording }"
+                title="Voice dictation"
+                @click="startVoiceDictation"
+                :disabled="isThinking"
+              >
+                <Mic :size="15" />
+              </button>
+            </div>
+
+            <!-- Send curved arrow button inside card matching screenshot -->
             <button 
               type="button" 
-              class="toolbar-icon-btn flex-center" 
-              title="Attach files"
-              @click="triggerFileSelect"
-              :disabled="isThinking || isRecording"
+              class="card-send-btn flex-center" 
+              :disabled="(!inputMessage.trim() && attachedFiles.length === 0) || isThinking || isRecording"
+              @click="handleSend"
             >
-              <Paperclip :size="15" />
-            </button>
-
-            <!-- Microphone dictation button -->
-            <button 
-              type="button" 
-              class="toolbar-icon-btn flex-center" 
-              :class="{ 'recording-active': isRecording }"
-              title="Voice dictation"
-              @click="startVoiceDictation"
-              :disabled="isThinking"
-            >
-              <Mic v-if="!isRecording" :size="15" />
-              <MicOff v-else :size="15" />
+              <CornerUpRight :size="14" />
             </button>
           </div>
-
-          <!-- Send curved arrow button inside card matching screenshot -->
-          <button 
-            type="button" 
-            class="card-send-btn flex-center" 
-            :disabled="(!inputMessage.trim() && attachedFiles.length === 0) || isThinking || isRecording"
-            @click="handleSend"
-          >
-            <CornerUpRight :size="14" />
-          </button>
         </div>
       </div>
     </div>
@@ -470,24 +489,38 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.double-box-outer {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 5px;
+  width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.double-box-outer:focus-within {
+  border-color: var(--text-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.double-box-outer.is-recording {
+  background-color: hsl(0, 100%, 97%);
+  border-color: hsl(0, 80%, 90%);
+}
+
 .chat-input-card {
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 11px;
   background-color: var(--bg-primary);
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
 }
 
-.chat-input-card:focus-within {
-  border-color: var(--text-primary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--text-primary);
-}
-
-.chat-input-card.is-recording {
+.double-box-outer.is-recording .chat-input-card {
   background-color: hsl(0, 100%, 99%);
   border-color: hsl(0, 80%, 90%);
 }

@@ -31,6 +31,14 @@ let recordInterval: any = null
 
 const draftTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const replyTextareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function adjustReplyTextareaHeight() {
+  const textarea = replyTextareaRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
+}
 
 // Attachment State
 interface AttachedFile {
@@ -267,6 +275,11 @@ function discardDraft() {
   generatedDraft.value = ''
   attachedFiles.value = []
   draftState.value = 'empty'
+  nextTick(() => {
+    if (replyTextareaRef.value) {
+      replyTextareaRef.value.style.height = 'auto'
+    }
+  })
 }
 </script>
 
@@ -369,93 +382,97 @@ function discardDraft() {
           style="display: none" 
         />
 
-        <div class="reply-input-card" :class="{ 'is-recording': draftState === 'dictating' }">
-          <!-- Render Attached File Chips inside card if any -->
-          <div v-if="attachedFiles.length > 0 && draftState !== 'dictating'" class="attachment-chips-row animate-fade-in">
-            <div 
-              v-for="(file, i) in attachedFiles" 
-              :key="i" 
-              class="attached-chip"
-            >
-              <FileText :size="11" class="chip-file-icon" />
-              <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-              <span class="chip-file-size">{{ file.size }}</span>
-              <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-                <X :size="10" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Textarea matching screenshot, hidden during dictation -->
-          <textarea 
-            v-if="draftState !== 'dictating'"
-            v-model="instructionText"
-            placeholder="Dump you mind, let me manage" 
-            class="reply-textarea"
-            rows="1"
-          ></textarea>
-
-          <!-- Dictating Waveform View Inside Card when Recording (Same as Chat!) -->
-          <div v-else class="dictating-pulse-row animate-fade-in">
-            <span class="recording-pulsing-dot"></span>
-            <span class="dictating-status-text">Listening... Speak now</span>
-            <div class="mini-voice-wave flex-center">
-              <span class="wave-pillar p1"></span>
-              <span class="wave-pillar p2"></span>
-              <span class="wave-pillar p3"></span>
-              <span class="wave-pillar p4"></span>
-            </div>
-            <button type="button" class="stop-dictate-btn" @click="stopVoiceInput">Stop</button>
-          </div>
-
-          <!-- Bottom toolbar nested inside card -->
-          <div class="card-toolbar-row">
-            <div class="toolbar-left-actions">
-              <!-- Paperclip button -->
-              <button 
-                type="button" 
-                class="toolbar-icon-btn flex-center" 
-                title="Attach files"
-                @click="triggerFileSelect"
-                :disabled="draftState === 'dictating'"
+        <div class="double-box-outer" :class="{ 'is-recording': draftState === 'dictating' }">
+          <div class="reply-input-card">
+            <!-- Render Attached File Chips inside card if any -->
+            <div v-if="attachedFiles.length > 0 && draftState !== 'dictating'" class="attachment-chips-row animate-fade-in">
+              <div 
+                v-for="(file, i) in attachedFiles" 
+                :key="i" 
+                class="attached-chip"
               >
-                <Paperclip :size="15" />
-              </button>
-
-              <!-- Microphone button -->
-              <button 
-                type="button" 
-                class="toolbar-icon-btn flex-center" 
-                :class="{ 'recording-active': draftState === 'dictating' }"
-                title="Voice dictation"
-                @click="startVoiceInput"
-              >
-                <Mic v-if="draftState !== 'dictating'" :size="15" />
-                <MicOff v-else :size="15" />
-              </button>
+                <FileText :size="11" class="chip-file-icon" />
+                <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
+                <span class="chip-file-size">{{ file.size }}</span>
+                <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
+                  <X :size="10" />
+                </button>
+              </div>
             </div>
 
-            <!-- Auto-draft outline + primary curved-arrow send buttons -->
-            <div class="toolbar-right-actions">
-              <button 
-                type="button" 
-                class="card-outline-draft-btn flex-center" 
-                @click="generateDraft"
-                :disabled="draftState === 'dictating'"
-                title="Auto-draft instantly from context"
-              >
-                <Sparkles :size="12" /> Auto-draft
-              </button>
+            <!-- Textarea matching screenshot, hidden during dictation -->
+            <textarea 
+              v-if="draftState !== 'dictating'"
+              ref="replyTextareaRef"
+              v-model="instructionText"
+              placeholder="Dump you mind, let me manage" 
+              class="reply-textarea"
+              rows="1"
+              @input="adjustReplyTextareaHeight"
+            ></textarea>
 
-              <button 
-                type="button" 
-                class="card-send-btn flex-center"
-                :disabled="(!instructionText.trim() && attachedFiles.length === 0) || draftState === 'dictating'"
-                @click="generateDraft"
-                title="Draft with instructions"
-              >
-                <CornerUpRight :size="14" />
-              </button>
+            <!-- Dictating Waveform View Inside Card when Recording (Same as Chat!) -->
+            <div class="dictating-pulse-row animate-fade-in" v-else>
+              <span class="recording-pulsing-dot"></span>
+              <span class="dictating-status-text">Listening... Speak now</span>
+              <div class="mini-voice-wave flex-center">
+                <span class="wave-pillar p1"></span>
+                <span class="wave-pillar p2"></span>
+                <span class="wave-pillar p3"></span>
+                <span class="wave-pillar p4"></span>
+              </div>
+              <button type="button" class="stop-dictate-btn" @click="stopVoiceInput">Stop</button>
+            </div>
+
+            <!-- Bottom toolbar nested inside card -->
+            <div class="card-toolbar-row">
+              <div class="toolbar-left-actions">
+                <!-- Paperclip button -->
+                <button 
+                  type="button" 
+                  class="toolbar-icon-btn flex-center" 
+                  title="Attach files"
+                  @click="triggerFileSelect"
+                  :disabled="draftState === 'dictating'"
+                >
+                  <Paperclip :size="15" />
+                </button>
+
+                <!-- Microphone button -->
+                <button 
+                  type="button" 
+                  class="toolbar-icon-btn flex-center" 
+                  :class="{ 'recording-active': draftState === 'dictating' }"
+                  title="Voice dictation"
+                  @click="startVoiceInput"
+                >
+                  <Mic v-if="draftState !== 'dictating'" :size="15" />
+                  <MicOff v-else :size="15" />
+                </button>
+              </div>
+
+              <!-- Auto-draft outline + primary curved-arrow send buttons -->
+              <div class="toolbar-right-actions">
+                <button 
+                  type="button" 
+                  class="card-outline-draft-btn flex-center" 
+                  @click="generateDraft"
+                  :disabled="draftState === 'dictating'"
+                  title="Auto-draft instantly from context"
+                >
+                  <Sparkles :size="12" /> Auto-draft
+                </button>
+
+                <button 
+                  type="button" 
+                  class="card-send-btn flex-center"
+                  :disabled="(!instructionText.trim() && attachedFiles.length === 0) || draftState === 'dictating'"
+                  @click="generateDraft"
+                  title="Draft with instructions"
+                >
+                  <CornerUpRight :size="14" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -825,24 +842,38 @@ function discardDraft() {
 }
 
 /* Empty / Card Input Stage CSS (Screenshot 1 Card) */
+.double-box-outer {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 5px;
+  width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.double-box-outer:focus-within {
+  border-color: var(--text-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.double-box-outer.is-recording {
+  background-color: hsl(0, 100%, 97%);
+  border-color: hsl(0, 80%, 90%);
+}
+
 .reply-input-card {
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 11px;
   background-color: var(--bg-primary);
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
 }
 
-.reply-input-card:focus-within {
-  border-color: var(--text-primary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--text-primary);
-}
-
-.reply-input-card.is-recording {
+.double-box-outer.is-recording .reply-input-card {
   background-color: hsl(0, 100%, 99%);
   border-color: hsl(0, 80%, 90%);
 }
