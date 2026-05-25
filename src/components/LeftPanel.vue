@@ -9,7 +9,8 @@ import {
   Settings,
   Plus,
   Inbox,
-  Sparkles
+  Sparkles,
+  Calendar
 } from '@lucide/vue'
 
 const {
@@ -19,7 +20,8 @@ const {
   filteredEmails,
   setSelectedEmailId,
   viewMode,
-  setViewMode
+  setViewMode,
+  emails
 } = useMail()
 
 const { selectedDateKey, setSelectedDateKey: setDateKey } = useDailyDigest()
@@ -36,6 +38,25 @@ function setSelectedDateKey(date: string) {
   if (viewMode.value !== 'inbox') {
     setViewMode('digest')
   }
+  
+  // Dynamically insert a mock email for this date so the feed isn't blank
+  const exists = emails.value.some(e => e.dateKey === date)
+  if (!exists && date) {
+    emails.value.push({
+      id: `dynamic_${Date.now()}`,
+      sender: 'Bubbles Intelligence',
+      senderEmail: 'assistant@bubbles.ai',
+      subject: `Daily Briefing - ${date}`,
+      date: `${date}, 9:00 AM`,
+      body: `Here is your dynamic briefing for ${date}. All email threads have been processed and archived. Your server uptime was 99.99%. No security advisories were published.`,
+      tags: ['briefing', 'automated'],
+      category: 'updates',
+      unread: false,
+      account: activeAccount.value,
+      dateKey: date
+    })
+  }
+
   // Wait for computed filteredEmails to update, then select first email
   setTimeout(() => {
     const firstMail = filteredEmails.value[0]
@@ -51,6 +72,27 @@ function handleInboxClick() {
     const firstMail = filteredEmails.value[0]
     setSelectedEmailId(firstMail ? firstMail.id : null)
   }, 0)
+}
+
+function handleCustomDateSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (!target.value) return
+  
+  // Target value format: YYYY-MM-DD (e.g. 2026-05-15)
+  const dateObj = new Date(target.value)
+  if (isNaN(dateObj.getTime())) return
+  
+  // Format as 'ddd, MMM D' (e.g. 'Fri, May 15')
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  
+  const ddd = days[dateObj.getDay()]
+  const MMM = months[dateObj.getMonth()]
+  const D = dateObj.getDate()
+  
+  const dateKeyStr = `${ddd}, ${MMM} ${D}`
+  
+  setSelectedDateKey(dateKeyStr)
 }
 </script>
 
@@ -142,6 +184,19 @@ function handleInboxClick() {
               <ChevronLeft :size="15" class="nav-icon date-chevron" />
               <span class="past-date-label">{{ date }}</span>
             </div>
+          </li>
+
+          <!-- Choose custom past date -->
+          <li class="nav-item timeline-item custom-date-picker-item">
+            <label class="custom-date-label-wrapper">
+              <Calendar :size="15" class="nav-icon date-chevron" />
+              <span class="past-date-label choose-date-text" style="opacity: 0.65;">Choose date...</span>
+              <input 
+                type="date" 
+                class="hidden-date-input" 
+                @change="handleCustomDateSelect"
+              />
+            </label>
           </li>
 
         </ul>
@@ -515,5 +570,29 @@ function handleInboxClick() {
 .footer-action-btn.active-settings {
   color: var(--text-primary);
   background-color: var(--bg-secondary);
+}
+
+/* Custom Date Picker Styles */
+.custom-date-picker-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.custom-date-label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.hidden-date-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>

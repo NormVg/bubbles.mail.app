@@ -279,6 +279,34 @@ export function useDailyDigest() {
 
   const setSelectedDateKey = (key: string) => {
     selectedDateKey.value = key
+    
+    // Dynamically insert a mock daily report if it does not exist
+    const exists = dailyReports.value.some(report => report.dateKey === key)
+    if (!exists && key) {
+      dailyReports.value.push({
+        dateKey: key,
+        dateFormatted: `${key}, 2026`,
+        summary: [
+          `Daily intelligence feed successfully compiled for ${key}.`,
+          'All indexed emails have been processed and archived.',
+          'Database operations, edge cache prefetching, and mail server health were fully stable.'
+        ],
+        tasks: [
+          {
+            id: `t_dyn_${Date.now()}`,
+            text: `Review briefing email for ${key}`,
+            completed: false,
+            sourceEmailId: `dynamic_${key}`
+          }
+        ],
+        deadlines: [],
+        threads: [],
+        insights: [
+          `Your mail workspace is up-to-date for ${key}.`,
+          'No critical security threats or options updates were reported.'
+        ]
+      })
+    }
   }
 
   const toggleTask = (taskId: string) => {
