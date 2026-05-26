@@ -269,10 +269,11 @@ const mockDailyReports: DailyReport[] = [
 ]
 
 // Stateful references
-const dailyReports = ref<DailyReport[]>(mockDailyReports)
-const selectedDateKey = ref<string>('Today')
+import { defineStore, storeToRefs } from 'pinia'
 
-export function useDailyDigest() {
+export const useDigestStore = defineStore('dailyDigest', () => {
+  const dailyReports = ref<DailyReport[]>(mockDailyReports)
+  const selectedDateKey = ref<string>('Today')
   const selectedReport = computed(() => {
     return dailyReports.value.find(report => report.dateKey === selectedDateKey.value) || dailyReports.value[0]
   })
@@ -337,5 +338,18 @@ export function useDailyDigest() {
     setSelectedDateKey,
     toggleTask,
     addTask
+  }
+})
+
+export function useDailyDigest() {
+  const store = useDigestStore()
+  const { dailyReports, selectedDateKey, selectedReport } = storeToRefs(store)
+  return {
+    dailyReports,
+    selectedDateKey,
+    selectedReport,
+    setSelectedDateKey: store.setSelectedDateKey,
+    toggleTask: store.toggleTask,
+    addTask: store.addTask
   }
 }

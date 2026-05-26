@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-import { CornerUpRight, FileText, Mic, Paperclip, Sparkles, Trash2, X } from '@lucide/vue'
+import { Sparkles, Trash2 } from '@lucide/vue'
 import AiChat from './AiChat.vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
+import AiInputBox from './common/AiInputBox.vue'
+import { useDictation } from '../composables/useDictation'
+import type { AttachedFile } from './common/AiInputBox.vue'
 
 const { selectedEmail } = useMail()
 const { sessions, currentSessionId, messages, createNewSession, deleteSession, sendMessage } = useAiAssistant()
 
 const inputMessage = ref('')
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const chatTextareaRef = ref<HTMLTextAreaElement | null>(null)
-const isRecording = ref(false)
-const dictationTimer = ref(0)
-let dictationInterval: ReturnType<typeof setInterval> | null = null
-
-interface AttachedFile {
-  name: string
-  size: string
-  type: string
-}
-
 const attachedFiles = ref<AttachedFile[]>([])
+
+const { isRecording, startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
+  if (selectedEmail.value) {
+    const sender = selectedEmail.value.sender.split(' ')[0]
+    inputMessage.value = `Can you draft a short, formal response to ${sender} accepting the timeline but suggesting we meet on Google Meet instead of B?`
+  } else {
+    inputMessage.value = result
+  }
+})
 
 const isFreshSession = computed(() => {
   const hasUserMessage = messages.value.some(message => message.sender === 'user')
@@ -80,71 +80,6 @@ function beginWelcomeToChatTransition() {
   }, TRANSITION_MS)
 }
 
-function triggerFileSelect() {
-  fileInputRef.value?.click()
-}
-
-function handleFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  if (!target.files) return
-  for (let i = 0; i < target.files.length; i++) {
-    const file = target.files[i]
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
-    attachedFiles.value.push({
-      name: file.name,
-      size: `${sizeMB} MB`,
-      type: file.type
-    })
-  }
-  target.value = ''
-}
-
-function removeFile(index: number) {
-  attachedFiles.value.splice(index, 1)
-}
-
-function adjustTextareaHeight() {
-  const textarea = chatTextareaRef.value
-  if (!textarea) return
-  textarea.style.height = 'auto'
-  textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
-}
-
-function startVoiceDictation() {
-  if (isRecording.value) {
-    stopVoiceDictation()
-    return
-  }
-
-  isRecording.value = true
-  dictationTimer.value = 0
-
-  dictationInterval = setInterval(() => {
-    dictationTimer.value += 1
-    if (dictationTimer.value >= 30) {
-      stopVoiceDictation()
-    }
-  }, 100)
-}
-
-function stopVoiceDictation() {
-  if (dictationInterval) {
-    clearInterval(dictationInterval)
-    dictationInterval = null
-  }
-
-  isRecording.value = false
-
-  if (selectedEmail.value) {
-    const sender = selectedEmail.value.sender.split(' ')[0]
-    inputMessage.value = `Can you draft a short, formal response to ${sender} accepting the timeline but suggesting we meet on Google Meet instead of B?`
-  } else {
-    inputMessage.value = "Show my highest priority tasks from today's intelligence summary."
-  }
-
-  nextTick(() => adjustTextareaHeight())
-}
-
 function handleStartChat() {
   if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
 
@@ -166,17 +101,11 @@ function handleStartChat() {
     window.setTimeout(() => {
       inputMessage.value = ''
       attachedFiles.value = []
-      if (chatTextareaRef.value) {
-        chatTextareaRef.value.style.height = 'auto'
-      }
     }, TRANSITION_MS)
   } else {
     inputMessage.value = ''
     attachedFiles.value = []
     nextTick(() => {
-      if (chatTextareaRef.value) {
-        chatTextareaRef.value.style.height = 'auto'
-      }
     })
   }
 }
@@ -237,77 +166,14 @@ function handleStartChat() {
               ? { left: `${transitionLeft}px`, top: `${transitionTop}px`, width: `${transitionWidth}px`, transform: `translateY(${transitionArmed ? transitionOffsetY : 0}px)` }
               : {}"
           >
-            <input
-              ref="fileInputRef"
-              type="file"
-              multiple
-              style="display: none"
-              @change="handleFileChange"
-            >
-
-            <div class="double-box-outer" :class="{ 'is-recording': isRecording }">
-              <div class="chat-input-card">
-                <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
-                  <div v-for="(file, i) in attachedFiles" :key="`${file.name}_${i}`" class="attached-chip">
-                    <FileText :size="11" class="chip-file-icon" />
-                    <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-                    <span class="chip-file-size">{{ file.size }}</span>
-                    <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-                      <X :size="10" />
-                    </button>
-                  </div>
-                </div>
-
-                <textarea
-                  v-if="!isRecording"
-                  ref="chatTextareaRef"
-                  v-model="inputMessage"
-                  placeholder="Dump your mind, let me manage"
-                  class="chat-textarea"
-                  rows="1"
-                  @input="adjustTextareaHeight"
-                  @keydown.enter.prevent="handleStartChat"
-                />
-
-                <div v-else class="dictating-pulse-row animate-fade-in">
-                  <span class="recording-pulsing-dot"></span>
-                  <span class="dictating-status-text">Listening... Speak now</span>
-                  <div class="mini-voice-wave flex-center">
-                    <span class="wave-pillar p1"></span>
-                    <span class="wave-pillar p2"></span>
-                    <span class="wave-pillar p3"></span>
-                    <span class="wave-pillar p4"></span>
-                  </div>
-                  <button type="button" class="stop-dictate-btn" @click="stopVoiceDictation">Stop</button>
-                </div>
-
-                <div class="card-toolbar-row">
-                  <div class="toolbar-left-actions">
-                    <button type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
-                      <Paperclip :size="15" />
-                    </button>
-                    <button
-                      type="button"
-                      class="toolbar-icon-btn flex-center"
-                      :class="{ 'recording-active': isRecording }"
-                      title="Voice dictation"
-                      @click="startVoiceDictation"
-                    >
-                      <Mic :size="15" />
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    class="card-send-btn flex-center"
-                    :disabled="(!inputMessage.trim() && attachedFiles.length === 0) || isRecording"
-                    @click="handleStartChat"
-                  >
-                    <CornerUpRight :size="14" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <AiInputBox
+              v-model="inputMessage"
+              v-model:attachedFiles="attachedFiles"
+              :isRecording="isRecording"
+              @send="handleStartChat"
+              @startDictation="startVoiceDictation"
+              @stopDictation="stopVoiceDictation"
+            />
           </div>
         </div>
 
@@ -498,218 +364,68 @@ function handleStartChat() {
   transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
 }
 
-.double-box-outer {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 5px;
-  width: 100%;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.05);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
 
-.double-box-outer:focus-within {
-  border-color: var(--text-primary);
-}
 
-.double-box-outer.is-recording {
-  background-color: hsl(0, 100%, 97%);
-  border-color: hsl(0, 80%, 90%);
-}
 
-.chat-input-card {
-  border: 1px solid var(--border-color);
-  border-radius: 11px;
-  background-color: var(--bg-primary);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 
-.chat-textarea {
-  border: none;
-  background: transparent;
-  width: 100%;
-  min-height: 24px;
-  max-height: 120px;
-  font-family: var(--font-sans);
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: var(--text-primary);
-  outline: none;
-  resize: none;
-}
 
-.chat-textarea::placeholder {
-  color: var(--text-muted);
-}
 
-.attachment-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 2px;
-}
 
-.attached-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 0.72rem;
-  color: var(--text-primary);
-  max-width: 170px;
-  overflow: hidden;
-}
 
-.chip-file-icon {
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
 
-.chip-file-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
 
-.chip-file-size {
-  color: var(--text-muted);
-  font-size: 0.65rem;
-  flex-shrink: 0;
-}
 
-.remove-chip-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 1px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 
-.remove-chip-btn:hover {
-  background-color: var(--border-color);
-  color: var(--text-primary);
-}
 
-.card-toolbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid transparent;
-}
 
-.toolbar-left-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
-.toolbar-icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .toolbar-icon-btn:hover:not(:disabled) {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
 
-.toolbar-icon-btn.recording-active {
-  background-color: hsl(0, 85%, 95%);
-  color: hsl(0, 85%, 45%);
-}
 
-.card-send-btn {
-  width: 32px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
+
+
 
 .card-send-btn:hover:not(:disabled),
-.chat-input-card:focus-within .card-send-btn {
-  background-color: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-primary);
-}
+.chat-input-card:focus-within 
 
-.card-send-btn:disabled {
-  opacity: 0.35;
-  background-color: var(--bg-secondary) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-muted) !important;
-  cursor: not-allowed;
-}
 
-.dictating-pulse-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 24px;
-}
 
-.recording-pulsing-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: hsl(0, 85%, 50%);
-  animation: voicePulse 1.2s infinite ease-in-out;
-}
 
-.dictating-status-text {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
 
-.mini-voice-wave {
-  display: flex;
-  align-items: center;
-  gap: 2.5px;
-  height: 14px;
-}
 
-.wave-pillar {
-  width: 2px;
-  background-color: var(--text-primary);
-  border-radius: 1px;
-  animation: moveWave 1s infinite alternate ease-in-out;
-}
+
+
+
+
+
+
 
 .p1 { height: 6px; animation-delay: 0.1s; }
 .p2 { height: 12px; animation-delay: 0.3s; }
 .p3 { height: 8px; animation-delay: 0.2s; }
 .p4 { height: 10px; animation-delay: 0.4s; }
 
-.stop-dictate-btn {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: auto;
-}
+
 
 .stop-dictate-btn:hover {
   background-color: var(--border-color);
@@ -767,8 +483,5 @@ function handleStartChat() {
   100% { transform: scale(0.85); opacity: 0.5; }
 }
 
-@keyframes moveWave {
-  from { transform: scaleY(0.6); }
-  to { transform: scaleY(1.3); }
-}
+
 </style>

@@ -1,6 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-05-25',
   devtools: { enabled: true },
+  modules: ['@pinia/nuxt'],
   // Use src/ as the Nuxt source directory
   srcDir: 'src',
   // Use SSG (no SSR) for Tauri

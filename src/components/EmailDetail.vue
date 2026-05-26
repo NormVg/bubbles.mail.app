@@ -4,19 +4,21 @@ import {
   Sparkles, 
   Zap, 
   Clock as ClockIcon, 
-  Mic, 
-  MicOff, 
+   
+   
   Wand2, 
   Send, 
   Trash2, 
   Check, 
   RefreshCw,
-  Paperclip,
-  FileText,
-  X,
+  
+  
+  
   CornerUpRight
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
+import AiInputBox from './common/AiInputBox.vue'
+import { useDictation } from '../composables/useDictation'
 import { useSettings } from '../composables/useSettings'
 
 const { selectedEmail } = useMail()
@@ -46,12 +48,6 @@ const draftTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const replyTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
-function adjustReplyTextareaHeight() {
-  const textarea = replyTextareaRef.value
-  if (!textarea) return
-  textarea.style.height = 'auto'
-  textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
-}
 
 // Attachment State
 interface AttachedFile {
@@ -102,11 +98,6 @@ const aiSummary = computed(() => {
 })
 
 // File Attachment handling
-function triggerFileSelect() {
-  if (fileInputRef.value) {
-    fileInputRef.value.click()
-  }
-}
 
 // Handle file attachment changes
 function handleFileChange(event: Event) {
@@ -124,52 +115,20 @@ function handleFileChange(event: Event) {
   }
 }
 
-function removeFile(index: number) {
-  attachedFiles.value.splice(index, 1)
-}
 
 // Simulate voice input dictation with waveform animations
-function startVoiceInput() {
-  if (draftState.value === 'generating') return
-  
-  if (draftState.value === 'dictating') {
-    stopVoiceInput()
-    return
-  }
 
+const { startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
+  instructionText.value = result
+})
+
+function startDictation() {
   draftState.value = 'dictating'
-  isRecording.value = true
-  recordingProgress.value = 0
-  
-  recordInterval = setInterval(() => {
-    recordingProgress.value += 1
-    // Pulse wave heights randomly
-    waveBars.value = waveBars.value.map(() => Math.floor(Math.random() * 26) + 6)
-    
-    // Stop and transcribe after 3.2 seconds automatically
-    if (recordingProgress.value >= 32) {
-      stopVoiceInput()
-    }
-  }, 100)
+  startVoiceDictation()
 }
 
-function stopVoiceInput() {
-  if (recordInterval) {
-    clearInterval(recordInterval)
-    recordInterval = null
-  }
-  isRecording.value = false
-  
-  if (selectedEmail.value) {
-    const sender = selectedEmail.value.sender.split(' ')[0]
-    if (selectedEmail.value.subject.includes('Meeting') || selectedEmail.value.subject.includes('Roadmap')) {
-      instructionText.value = `Tell ${sender} that I will definitely join the sync tomorrow. Let's make sure we walk through the milestones first, and see if we can host it on Google Meet instead.`
-    } else if (selectedEmail.value.subject.includes('Budget')) {
-      instructionText.value = `Say that I've looked at the QA sheet and 15% seems a bit high to cut. Let's schedule a brief 10 minute call to negotiate.`
-    } else {
-      instructionText.value = `Draft a friendly response thanking ${sender} for the update and confirming that I've reviewed the details. everything looks solid.`
-    }
-  }
+function stopDictation() {
+  stopVoiceDictation()
   draftState.value = 'empty'
 }
 
@@ -413,100 +372,21 @@ function discardDraft() {
           style="display: none" 
         />
 
-        <div class="double-box-outer" :class="{ 'is-recording': draftState === 'dictating' }">
-          <div class="reply-input-card">
-            <!-- Render Attached File Chips inside card if any -->
-            <div v-if="attachedFiles.length > 0 && draftState !== 'dictating'" class="attachment-chips-row animate-fade-in">
-              <div 
-                v-for="(file, i) in attachedFiles" 
-                :key="i" 
-                class="attached-chip"
-              >
-                <FileText :size="11" class="chip-file-icon" />
-                <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-                <span class="chip-file-size">{{ file.size }}</span>
-                <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-                  <X :size="10" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Textarea matching screenshot, hidden during dictation -->
-            <textarea 
-              v-if="draftState !== 'dictating'"
-              ref="replyTextareaRef"
-              v-model="instructionText"
-              placeholder="Dump you mind, let me manage" 
-              class="reply-textarea"
-              rows="1"
-              @input="adjustReplyTextareaHeight"
-            ></textarea>
-
-            <!-- Dictating Waveform View Inside Card when Recording (Same as Chat!) -->
-            <div class="dictating-pulse-row animate-fade-in" v-else>
-              <span class="recording-pulsing-dot"></span>
-              <span class="dictating-status-text">Listening... Speak now</span>
-              <div class="mini-voice-wave flex-center">
-                <span class="wave-pillar p1"></span>
-                <span class="wave-pillar p2"></span>
-                <span class="wave-pillar p3"></span>
-                <span class="wave-pillar p4"></span>
-              </div>
-              <button type="button" class="stop-dictate-btn" @click="stopVoiceInput">Stop</button>
-            </div>
-
-            <!-- Bottom toolbar nested inside card -->
-            <div class="card-toolbar-row">
-              <div class="toolbar-left-actions">
-                <!-- Paperclip button -->
-                <button 
-                  type="button" 
-                  class="toolbar-icon-btn flex-center" 
-                  title="Attach files"
-                  @click="triggerFileSelect"
-                  :disabled="draftState === 'dictating'"
-                >
-                  <Paperclip :size="15" />
-                </button>
-
-                <!-- Microphone button -->
-                <button 
-                  type="button" 
-                  class="toolbar-icon-btn flex-center" 
-                  :class="{ 'recording-active': draftState === 'dictating' }"
-                  title="Voice dictation"
-                  @click="startVoiceInput"
-                >
-                  <Mic v-if="draftState !== 'dictating'" :size="15" />
-                  <MicOff v-else :size="15" />
-                </button>
-              </div>
-
-              <!-- Auto-draft outline + primary curved-arrow send buttons -->
-              <div class="toolbar-right-actions">
-                <button 
-                  type="button" 
-                  class="card-outline-draft-btn flex-center" 
-                  @click="generateDraft"
-                  :disabled="draftState === 'dictating'"
-                  title="Auto-draft instantly from context"
-                >
-                  <Sparkles :size="12" /> Auto-draft
-                </button>
-
-                <button 
-                  type="button" 
-                  class="card-send-btn flex-center"
-                  :disabled="(!instructionText.trim() && attachedFiles.length === 0) || draftState === 'dictating'"
-                  @click="generateDraft"
-                  title="Draft with instructions"
-                >
-                  <CornerUpRight :size="14" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AiInputBox
+          v-model="instructionText"
+          v-model:attachedFiles="attachedFiles"
+          :isRecording="draftState === 'dictating'"
+          :disabled="draftState === 'generating'"
+          @send="generateDraft"
+          @startDictation="startDictation"
+          @stopDictation="stopDictation"
+        >
+          <template #toolbar-right>
+            <button type="button" class="card-outline-draft-btn flex-center" :disabled="draftState === 'dictating'" title="Auto-draft instantly from context" @click="generateDraft">
+              <Sparkles :size="12" /> Auto-draft
+            </button>
+          </template>
+        </AiInputBox>
 
         <p class="copywriting-hint">
           Your context above is a guide. AI will generate a professional draft for you to review and edit before sending.

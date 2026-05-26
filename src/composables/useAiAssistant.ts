@@ -30,12 +30,13 @@ const initialSessions: ChatSession[] = [
   }
 ]
 
-// Global state refs shared across composer instances
-const sessions = ref<ChatSession[]>(initialSessions)
-const currentSessionId = ref<string>('s1')
-const isThinking = ref<boolean>(false)
+import { defineStore, storeToRefs } from 'pinia'
 
-export function useAiAssistant() {
+export const useAiStore = defineStore('aiAssistant', () => {
+  const sessions = ref<ChatSession[]>(initialSessions)
+  const currentSessionId = ref<string>('s1')
+  const isThinking = ref<boolean>(false)
+
   const currentSession = computed(() => {
     return sessions.value.find(s => s.id === currentSessionId.value) || sessions.value[0]
   })
@@ -219,5 +220,18 @@ I'm ready to help you write drafts or search details on these threads!`
     createNewSession,
     deleteSession,
     clearChat
+  }
+})
+
+export function useAiAssistant() {
+  const store = useAiStore()
+  const { sessions, currentSessionId, messages, isThinking } = storeToRefs(store)
+  return {
+    sessions, currentSessionId, messages, isThinking,
+    getSuggestedActions: store.getSuggestedActions,
+    sendMessage: store.sendMessage,
+    createNewSession: store.createNewSession,
+    deleteSession: store.deleteSession,
+    clearChat: store.clearChat
   }
 }

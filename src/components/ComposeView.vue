@@ -5,14 +5,14 @@ import {
   Bold,
   Check,
   ChevronDown,
-  CornerUpRight,
+  
   FileText,
   Italic,
   Link,
   List,
   ListOrdered,
-  Mic,
-  MicOff,
+  
+  
   Paperclip,
   RefreshCw,
   Send,
@@ -24,6 +24,8 @@ import {
   X
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
+import AiInputBox from './common/AiInputBox.vue'
+import { useDictation } from '../composables/useDictation'
 
 const { activeAccount, setViewMode } = useMail()
 
@@ -198,9 +200,6 @@ function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
 }
 
-function triggerAiAttach() {
-  aiFileInputRef.value?.click()
-}
 
 function handleAiFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
@@ -210,9 +209,6 @@ function handleAiFileSelect(event: Event) {
   input.value = ''
 }
 
-function removeAiAttachment(index: number) {
-  aiAttachedFiles.value.splice(index, 1)
-}
 
 function autosizeTextarea(textarea: HTMLTextAreaElement | null, maxHeight = 420) {
   if (!textarea) return
@@ -225,9 +221,6 @@ function onBodyInput() {
   nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
 }
 
-function onAiPromptInput() {
-  nextTick(() => autosizeTextarea(aiPromptRef.value, 160))
-}
 
 function onAiDraftInput() {
   nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
@@ -643,64 +636,22 @@ function handleSend() {
             <div v-if="aiDraftState === 'empty' || aiDraftState === 'dictating'" class="input-stage-container animate-fade-in">
               <input ref="aiFileInputRef" type="file" multiple class="hidden-file-input" @change="handleAiFileSelect">
 
-              <div class="double-box-outer" :class="{ 'is-recording': aiDraftState === 'dictating' }">
-                <div class="reply-input-card">
-                  <div v-if="aiAttachedFiles.length > 0 && aiDraftState !== 'dictating'" class="attachment-chips-row animate-fade-in">
-                    <div v-for="(file, index) in aiAttachedFiles" :key="`${file.name}_ai_${index}`" class="attached-chip">
-                      <FileText :size="11" class="chip-file-icon" />
-                      <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-                      <span class="chip-file-size">{{ file.size }}</span>
-                      <button type="button" class="remove-chip-btn flex-center" @click="removeAiAttachment(index)">
-                        <X :size="10" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <textarea
-                    v-if="aiDraftState !== 'dictating'"
-                    ref="aiPromptRef"
-                    v-model="aiPrompt"
-                    placeholder="Dump you mind, let me manage"
-                    class="reply-textarea"
-                    rows="1"
-                    @input="onAiPromptInput"
-                  />
-
-                  <div v-else class="dictating-pulse-row animate-fade-in">
-                    <span class="recording-pulsing-dot" />
-                    <span class="dictating-status-text">Listening... Speak now</span>
-                    <div class="mini-voice-wave flex-center">
-                      <span class="wave-pillar p1" />
-                      <span class="wave-pillar p2" />
-                      <span class="wave-pillar p3" />
-                      <span class="wave-pillar p4" />
-                    </div>
-                    <button type="button" class="stop-dictate-btn" @click="stopVoiceInput">Stop</button>
-                  </div>
-
-                  <div class="card-toolbar-row">
-                    <div class="toolbar-left-actions">
-                      <button type="button" class="toolbar-icon-btn flex-center" title="Attach files" :disabled="aiDraftState === 'dictating'" @click="triggerAiAttach">
-                        <Paperclip :size="15" />
-                      </button>
-                      <button type="button" class="toolbar-icon-btn flex-center" :class="{ 'recording-active': aiDraftState === 'dictating' }" title="Voice dictation" @click="startVoiceInput">
-                        <Mic v-if="aiDraftState !== 'dictating'" :size="15" />
-                        <MicOff v-else :size="15" />
-                      </button>
-                    </div>
-
-                    <div class="toolbar-right-actions">
-                      <button type="button" class="card-outline-draft-btn flex-center" :disabled="aiDraftState === 'dictating'" title="Auto-draft instantly from context" @click="generateAiDraft">
-                        <Sparkles :size="12" /> Auto-draft
-                      </button>
-                      <button type="button" class="card-send-btn flex-center" :disabled="(!aiPrompt.trim() && aiAttachedFiles.length === 0) || aiDraftState === 'dictating'" title="Draft with instructions" @click="generateAiDraft">
-                        <CornerUpRight :size="14" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              <AiInputBox
+                  v-model="aiPrompt"
+                  v-model:attachedFiles="aiAttachedFiles"
+                  :isRecording="aiDraftState === 'dictating'"
+                  :disabled="aiDraftState === 'generating'"
+                  @send="generateAiDraft"
+                  @startDictation="startVoiceInput"
+                  @stopDictation="stopVoiceInput"
+                >
+                  <template #toolbar-right>
+                    <button type="button" class="card-outline-draft-btn flex-center" :disabled="aiDraftState === 'dictating'" title="Auto-draft instantly from context" @click="generateAiDraft">
+                      <Sparkles :size="12" /> Auto-draft
+                    </button>
+                  </template>
+                </AiInputBox>
               </div>
-
               <p class="copywriting-hint">
                 Your context above is a guide. AI will generate a professional draft for you to review and edit before sending.
               </p>
@@ -1768,24 +1719,11 @@ button:disabled {
   color: var(--bg-primary);
 }
 
-.double-box-outer {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 5px;
-  width: 100%;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
 
-.double-box-outer:focus-within {
-  border-color: var(--text-primary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
-}
 
-.double-box-outer.is-recording {
-  background-color: hsl(0, 100%, 97%);
-  border-color: hsl(0, 80%, 90%);
-}
+
+
+
 
 .reply-input-card {
   border: 1px solid var(--border-color);
@@ -1804,115 +1742,37 @@ button:disabled {
   border-color: hsl(0, 80%, 90%);
 }
 
-.reply-textarea {
-  width: 100%;
-  min-height: 24px;
-  max-height: 120px;
-  border: none;
-  background: transparent;
-  padding: 0;
-  font-family: var(--font-sans);
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: var(--text-primary);
-  outline: none;
-  resize: none;
-  overflow-y: auto;
-}
 
-.reply-textarea::placeholder {
-  color: var(--text-muted);
-}
 
-.attachment-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 2px;
-}
 
-.attached-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 0.72rem;
-  color: var(--text-primary);
-  max-width: 170px;
-  overflow: hidden;
-}
 
-.chip-file-icon {
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
 
-.chip-file-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
 
-.chip-file-size {
-  color: var(--text-muted);
-  font-size: 0.65rem;
-  flex-shrink: 0;
-}
 
-.remove-chip-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 1px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 
-.remove-chip-btn:hover {
-  background-color: var(--border-color);
-  color: var(--text-primary);
-}
 
-.card-toolbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid transparent;
-}
+
+
+
+
+
+
+
+
+
+
 
 .toolbar-left-actions,
-.toolbar-right-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
-.toolbar-icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-  padding: 0;
-  transition: all var(--transition-fast);
-}
+
+
 
 .toolbar-icon-btn:hover:not(:disabled) {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
 
-.toolbar-icon-btn.recording-active {
-  background-color: hsl(0, 85%, 95%);
-  color: hsl(0, 85%, 45%);
-}
+
 
 .card-outline-draft-btn {
   background: var(--bg-primary);
@@ -1940,31 +1800,12 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.card-send-btn {
-  width: 32px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
+
 
 .reply-input-card:focus-within .card-send-btn,
-.card-send-btn:hover:not(:disabled) {
-  background-color: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-primary);
-}
 
-.card-send-btn:disabled {
-  opacity: 0.35;
-  background-color: var(--bg-secondary) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-muted) !important;
-  cursor: not-allowed;
-}
+
+
 
 .copywriting-hint,
 .draft-stage-copywriting {
@@ -1974,57 +1815,22 @@ button:disabled {
   margin-top: 4px;
 }
 
-.dictating-pulse-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 24px;
-}
 
-.recording-pulsing-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: hsl(0, 85%, 50%);
-  animation: voicePulse 1.2s infinite ease-in-out;
-}
 
-.dictating-status-text {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
 
-.mini-voice-wave {
-  display: flex;
-  align-items: center;
-  gap: 2.5px;
-  height: 14px;
-}
 
-.wave-pillar {
-  width: 2px;
-  background-color: var(--text-primary);
-  border-radius: 1px;
-  animation: moveWave 1s infinite alternate ease-in-out;
-}
+
+
+
+
+
 
 .p1 { height: 6px; animation-delay: 0.1s; }
 .p2 { height: 12px; animation-delay: 0.3s; }
 .p3 { height: 8px; animation-delay: 0.2s; }
 .p4 { height: 10px; animation-delay: 0.4s; }
 
-.stop-dictate-btn {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: auto;
-}
+
 
 .stop-dictate-btn:hover {
   background-color: var(--border-color);
@@ -2220,10 +2026,7 @@ button:disabled {
   100% { transform: scale(0.85); opacity: 0.5; }
 }
 
-@keyframes moveWave {
-  from { transform: scaleY(0.6); }
-  to { transform: scaleY(1.3); }
-}
+
 
 @keyframes pulseSparkle {
   0% { transform: scale(0.9); opacity: 0.5; }

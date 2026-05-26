@@ -263,15 +263,16 @@ Bubbles System Ops`,
 ]
 
 // Shared state references
-const emails = ref<Email[]>(mockEmails)
-const selectedEmailId = ref<string | null>('1') // default select first email
-const searchQuery = ref<string>('')
-const activeCategory = ref<string | null>(null)
-const activeTab = ref<'all' | 'unread'>('all')
-const viewMode = ref<'digest' | 'inbox' | 'chat' | 'settings' | 'compose'>('digest') // 'digest' is default (Bubbles AI)
-const activeAccount = ref<string>('vishnuarunkmgupta@gmail.com') // Unified account selector state
+import { defineStore, storeToRefs } from 'pinia'
 
-export function useMail() {
+export const useMailStore = defineStore('mail', () => {
+  const emails = ref<Email[]>(mockEmails)
+  const selectedEmailId = ref<string | null>('1')
+  const searchQuery = ref<string>('')
+  const activeCategory = ref<string | null>(null)
+  const activeTab = ref<'all' | 'unread'>('all')
+  const viewMode = ref<'digest' | 'inbox' | 'chat' | 'settings' | 'compose'>('digest')
+  const activeAccount = ref<string>('vishnuarunkmgupta@gmail.com')
   const { selectedDateKey } = useDailyDigest()
 
   const selectedEmail = computed(() => 
@@ -416,26 +417,34 @@ export function useMail() {
   }
 
   return {
-    emails,
-    selectedEmailId,
-    selectedEmail,
-    searchQuery,
-    activeCategory,
-    activeTab,
-    viewMode,
-    activeAccount,
-    filteredEmails,
-    totalUnreadCount,
-    accountUnreadCounts,
-    categoryCounts,
-    setSelectedEmailId,
-    setSearchQuery,
-    setActiveCategory,
-    setActiveTab,
-    setViewMode,
-    setActiveAccount,
-    deleteEmail,
-    archiveEmail,
-    markUnread
+    emails, selectedEmailId, selectedEmail, searchQuery, activeCategory,
+    activeTab, viewMode, activeAccount, filteredEmails, totalUnreadCount,
+    accountUnreadCounts, categoryCounts,
+    setSelectedEmailId, setSearchQuery, setActiveCategory, setActiveTab,
+    setViewMode, setActiveAccount, deleteEmail, archiveEmail, markUnread
+  }
+})
+
+export function useMail() {
+  const store = useMailStore()
+  const {
+    emails, selectedEmailId, selectedEmail, searchQuery, activeCategory,
+    activeTab, viewMode, activeAccount, filteredEmails, totalUnreadCount,
+    accountUnreadCounts, categoryCounts
+  } = storeToRefs(store)
+  
+  return {
+    emails, selectedEmailId, selectedEmail, searchQuery, activeCategory,
+    activeTab, viewMode, activeAccount, filteredEmails, totalUnreadCount,
+    accountUnreadCounts, categoryCounts,
+    setSelectedEmailId: store.setSelectedEmailId,
+    setSearchQuery: store.setSearchQuery,
+    setActiveCategory: store.setActiveCategory,
+    setActiveTab: store.setActiveTab,
+    setViewMode: store.setViewMode,
+    setActiveAccount: store.setActiveAccount,
+    deleteEmail: store.deleteEmail,
+    archiveEmail: store.archiveEmail,
+    markUnread: store.markUnread
   }
 }
