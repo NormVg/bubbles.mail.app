@@ -30,10 +30,10 @@ function selectSession(id: string) {
   <div class="chat-sessions-pane animate-fade-in">
     <!-- Header with New Chat btn -->
     <div class="pane-header sessions-header">
-      <h2 class="pane-title flex-center gap-6">
-        <Sparkles :size="15" />
-        Conversations
-      </h2>
+      <div class="header-left">
+        <Sparkles :size="15" class="header-icon" />
+        <span class="header-title">Conversations</span>
+      </div>
       <button 
         class="new-session-btn flex-center" 
         @click="createNewSession" 
@@ -107,15 +107,9 @@ function selectSession(id: string) {
 }
 
 .sessions-header {
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 16px;
-}
-
-.gap-6 {
-  gap: 6px;
 }
 
 .new-session-btn {

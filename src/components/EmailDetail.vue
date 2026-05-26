@@ -922,6 +922,7 @@ function discardDraft() {
   color: var(--text-primary);
   outline: none;
   resize: none;
+  overflow-y: auto;
 }
 
 .reply-textarea::placeholder {
@@ -1262,6 +1263,7 @@ function discardDraft() {
   width: 100%;
   outline: none;
   resize: vertical;
+  overflow-y: auto;
 }
 
 .draft-stage-copywriting {

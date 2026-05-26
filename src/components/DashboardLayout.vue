@@ -3,6 +3,10 @@ defineProps({
   hideMiddle: {
     type: Boolean,
     default: false
+  },
+  hideRight: {
+    type: Boolean,
+    default: false
   }
 })
 </script>
@@ -13,8 +17,8 @@ defineProps({
       <slot name="left" />
       <div class="pane-divider" v-if="!hideMiddle"></div>
       <slot name="middle" v-if="!hideMiddle" />
-      <div class="pane-divider"></div>
-      <slot name="right" />
+      <div class="pane-divider" v-if="!hideRight"></div>
+      <slot name="right" v-if="!hideRight" />
     </div>
   </div>
 </template>

@@ -14,10 +14,10 @@ const activeSession = computed(() => {
 <template>
   <div class="chat-focus-view animate-fade-in">
     <!-- Active Chat Title Header -->
-    <div class="pane-header chat-focus-header">
-      <div class="header-title-row flex-center gap-6">
-        <Sparkles class="header-sparkle-icon" :size="14" />
-        <h2 class="pane-title">{{ activeSession.title }}</h2>
+    <div class="pane-header middle-header">
+      <div class="header-left">
+        <Sparkles :size="15" class="header-icon" />
+        <span class="header-title">{{ activeSession.title }}</span>
       </div>
     </div>
 
@@ -36,19 +36,11 @@ const activeSession = computed(() => {
   background-color: var(--bg-primary);
 }
 
-.chat-focus-header {
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 24px;
+.middle-header {
   display: flex;
   align-items: center;
-}
-
-.gap-6 {
-  gap: 6px;
-}
-
-.header-sparkle-icon {
-  color: var(--text-secondary);
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .chat-focus-body {

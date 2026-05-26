@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useMail } from './composables/useMail'
+import ComposeView from './components/ComposeView.vue'
 
 // Import global styling
 import './assets/css/main.css'

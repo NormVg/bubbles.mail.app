@@ -1,118 +1,41 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import type { Ref } from 'vue'
 import {
-  Send, Paperclip, Bold, Italic, Underline, List,
-  ListOrdered, Link, Trash2, FileText, ChevronDown, Sparkles, Check, RefreshCw
+  Bold,
+  Check,
+  ChevronDown,
+  CornerUpRight,
+  FileText,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  Mic,
+  MicOff,
+  Paperclip,
+  RefreshCw,
+  Send,
+  Sparkles,
+  SquarePen,
+  Trash2,
+  UnderlineIcon,
+  Wand2,
+  X
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 
 const { activeAccount, setViewMode } = useMail()
 
-// ─── Previous view tracking ──────────────────────────────────────────────────
-function goBack() { setViewMode('inbox') }
-
-// ─── From account ────────────────────────────────────────────────────────────
-const accounts = [
-  'thenormvg@gmail.com',
-  'vishnuarunkmgupta@gmail.com',
-  'thealphaones.hq@gmail.com'
-]
-const fromAccount = ref(activeAccount.value)
-const showFromDropdown = ref(false)
-
-// ─── Recipients (To / CC / BCC) ─────────────────────────────────────────────
-interface Chip { id: string; email: string; valid: boolean }
-const toChips    = ref<Chip[]>([])
-const ccChips    = ref<Chip[]>([])
-const bccChips   = ref<Chip[]>([])
-const toInput    = ref('')
-const ccInput    = ref('')
-const bccInput   = ref('')
-const showCc     = ref(false)
-const showBcc    = ref(false)
-
-const toInputRef  = ref<HTMLInputElement | null>(null)
-const ccInputRef  = ref<HTMLInputElement | null>(null)
-const bccInputRef = ref<HTMLInputElement | null>(null)
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+interface Chip {
+  id: string
+  email: string
+  valid: boolean
 }
 
-function addChip(chips: typeof toChips, input: typeof toInput, inputRef: typeof toInputRef) {
-  const val = input.value.trim().replace(/,+$/, '')
-  if (!val) return
-  chips.value.push({ id: `${Date.now()}_${Math.random()}`, email: val, valid: isValidEmail(val) })
-  input.value = ''
-  nextTick(() => inputRef.value?.focus())
-}
-
-function removeChip(chips: typeof toChips, id: string) {
-  chips.value = chips.value.filter(c => c.id !== id)
-}
-
-function handleChipKeydown(e: KeyboardEvent, chips: typeof toChips, input: typeof toInput, inputRef: typeof toInputRef) {
-  if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
-    e.preventDefault()
-    addChip(chips, input, inputRef)
-  } else if (e.key === 'Backspace' && !input.value && chips.value.length) {
-    chips.value.pop()
-  }
-}
-
-// ─── Subject ─────────────────────────────────────────────────────────────────
-const subject = ref('')
-
-// ─── Rich text body ──────────────────────────────────────────────────────────
-const bodyRef = ref<HTMLDivElement | null>(null)
-const bodyIsEmpty = ref(true)
-
-function onBodyInput() {
-  bodyIsEmpty.value = !bodyRef.value?.innerText.trim()
-}
-
-function execFmt(cmd: string, value?: string) {
-  document.execCommand(cmd, false, value)
-  bodyRef.value?.focus()
-}
-
-function insertLink() {
-  const url = window.prompt('Enter URL', 'https://')
-  if (url) execFmt('createLink', url)
-}
-
-// ─── Attachment state (UI only) ──────────────────────────────────────────────
-const attachments = ref<string[]>([])
-const fileInputRef = ref<HTMLInputElement | null>(null)
-
-function triggerAttach() { fileInputRef.value?.click() }
-
-function handleFileSelect(e: Event) {
-  const files = (e.target as HTMLInputElement).files
-  if (!files) return
-  for (const f of Array.from(files)) {
-    attachments.value.push(f.name)
-  }
-}
-
-function removeAttachment(name: string) {
-  attachments.value = attachments.value.filter(a => a !== name)
-}
-
-// ─── Send / draft ────────────────────────────────────────────────────────────
-const sent      = ref(false)
-const draftSaved = ref(false)
-
-function handleSend() {
-  sent.value = true
-  setTimeout(() => goBack(), 1200)
-}
-
-// ─── Saved Drafts Management ─────────────────────────────────────────────────
 interface SavedDraft {
   id: string
   subject: string
-  to: string
   body: string
   toChips: Chip[]
   ccChips: Chip[]
@@ -120,14 +43,61 @@ interface SavedDraft {
   time: string
 }
 
+interface AttachedFile {
+  name: string
+  size: string
+  type: string
+}
+
+type DraftState = 'empty' | 'dictating' | 'generating' | 'drafted'
+
+const fromAccounts = [
+  'thenormvg@gmail.com',
+  'vishnuarunkmgupta@gmail.com',
+  'thealphaones.hq@gmail.com'
+]
+
+const fromAccount = ref(activeAccount.value)
+const showFromDropdown = ref(false)
 const showDraftsDropdown = ref(false)
+const showCc = ref(false)
+const showBcc = ref(false)
+const showAiPanel = ref(true)
+
+const toChips = ref<Chip[]>([])
+const ccChips = ref<Chip[]>([])
+const bccChips = ref<Chip[]>([])
+const toInput = ref('')
+const ccInput = ref('')
+const bccInput = ref('')
+
+const toInputRef = ref<HTMLInputElement | null>(null)
+const ccInputRef = ref<HTMLInputElement | null>(null)
+const bccInputRef = ref<HTMLInputElement | null>(null)
+const bodyTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const aiFileInputRef = ref<HTMLInputElement | null>(null)
+const aiPromptRef = ref<HTMLTextAreaElement | null>(null)
+const aiDraftRef = ref<HTMLTextAreaElement | null>(null)
+
+const subject = ref('')
+const body = ref('')
+const attachments = ref<AttachedFile[]>([])
+const sent = ref(false)
+const draftSaved = ref(false)
+
+const aiDraftState = ref<DraftState>('empty')
+const aiPrompt = ref('')
+const aiDraft = ref('')
+const aiAttachedFiles = ref<AttachedFile[]>([])
+const aiShowApplied = ref(false)
+
 const savedDrafts = ref<SavedDraft[]>([
   {
     id: 'd1',
     subject: 'Follow Up: Q2 Sprint Review Pipeline',
-    to: 'william.smith@example.com',
     body: 'Hi William,\n\nI wanted to check on the Q2 desktop app compilation latency. We should confirm the database cache indices before testing tomorrow.\n\nBest,\nAlicia',
-    toChips: [{ id: '1', email: 'william.smith@example.com', valid: true }],
+    toChips: [{ id: 'draft_1', email: 'william.smith@example.com', valid: true }],
     ccChips: [],
     bccChips: [],
     time: '2 hours ago'
@@ -135,312 +105,380 @@ const savedDrafts = ref<SavedDraft[]>([
   {
     id: 'd2',
     subject: 'Tauri Platform Release Notes',
-    to: 'engineering-list@bubbles.ai',
     body: 'Team,\n\nHere are the raw updates on the Tauri cross-platform security configurations for local SQLite databases. All pipelines have passed client tests.\n\nThanks,\nAlicia',
-    toChips: [{ id: '2', email: 'engineering-list@bubbles.ai', valid: true }],
+    toChips: [{ id: 'draft_2', email: 'engineering-list@bubbles.ai', valid: true }],
     ccChips: [],
     bccChips: [],
     time: 'Yesterday'
   }
 ])
 
+const canSend = computed(() => {
+  const recipients = toChips.value.some(chip => chip.valid)
+  return recipients && (subject.value.trim().length > 0 || body.value.trim().length > 0)
+})
+
+const visibleFromAccount = computed(() => fromAccount.value || activeAccount.value)
+
+function goBack() {
+  setViewMode('inbox')
+}
+
+function selectFromAccount(account: string) {
+  fromAccount.value = account
+  showFromDropdown.value = false
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+}
+
+function chipId() {
+  return `chip_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
+function addChip(chips: Ref<Chip[]>, input: Ref<string>, inputRef?: Ref<HTMLInputElement | null>) {
+  const values = input.value
+    .split(/[,\n;]/)
+    .map(value => value.trim())
+    .filter(Boolean)
+
+  if (!values.length) return
+
+  const existing = new Set(chips.value.map(chip => chip.email.toLowerCase()))
+  for (const email of values) {
+    if (!existing.has(email.toLowerCase())) {
+      chips.value.push({ id: chipId(), email, valid: isValidEmail(email) })
+      existing.add(email.toLowerCase())
+    }
+  }
+
+  input.value = ''
+  nextTick(() => inputRef?.value?.focus())
+}
+
+function removeChip(chips: Ref<Chip[]>, id: string) {
+  chips.value = chips.value.filter(chip => chip.id !== id)
+}
+
+function handleChipKeydown(event: KeyboardEvent, chips: Ref<Chip[]>, input: Ref<string>, inputRef: Ref<HTMLInputElement | null>) {
+  if (event.key === 'Enter' || event.key === ',' || event.key === 'Tab') {
+    event.preventDefault()
+    addChip(chips, input, inputRef)
+    return
+  }
+
+  if (event.key === 'Backspace' && !input.value && chips.value.length) {
+    chips.value.pop()
+  }
+}
+
+function formatFile(file: File): AttachedFile {
+  const kb = file.size / 1024
+  return {
+    name: file.name,
+    size: kb < 1024 ? `${Math.max(1, Math.round(kb))} KB` : `${(kb / 1024).toFixed(1)} MB`,
+    type: file.type
+  }
+}
+
+function triggerAttach() {
+  fileInputRef.value?.click()
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files) return
+  attachments.value.push(...Array.from(files).map(formatFile))
+  input.value = ''
+}
+
+function removeAttachment(index: number) {
+  attachments.value.splice(index, 1)
+}
+
+function triggerAiAttach() {
+  aiFileInputRef.value?.click()
+}
+
+function handleAiFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files) return
+  aiAttachedFiles.value.push(...Array.from(files).map(formatFile))
+  input.value = ''
+}
+
+function removeAiAttachment(index: number) {
+  aiAttachedFiles.value.splice(index, 1)
+}
+
+function autosizeTextarea(textarea: HTMLTextAreaElement | null, maxHeight = 420) {
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+}
+
+function onBodyInput() {
+  nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
+}
+
+function onAiPromptInput() {
+  nextTick(() => autosizeTextarea(aiPromptRef.value, 160))
+}
+
+function onAiDraftInput() {
+  nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
+}
+
+function wrapSelection(prefix: string, suffix = '') {
+  const textarea = bodyTextareaRef.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selected = body.value.slice(start, end)
+  const nextValue = `${prefix}${selected || 'text'}${suffix}`
+  textarea.setRangeText(nextValue, start, end, 'select')
+  body.value = textarea.value
+  textarea.focus()
+  onBodyInput()
+}
+
+function insertLinePrefix(prefix: string) {
+  const textarea = bodyTextareaRef.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const lineStart = body.value.lastIndexOf('\n', start - 1) + 1
+  textarea.setRangeText(prefix, lineStart, lineStart, 'end')
+  body.value = textarea.value
+  textarea.focus()
+  onBodyInput()
+}
+
+function insertLink() {
+  const url = window.prompt('Enter URL', 'https://')
+  if (!url) return
+  wrapSelection('[', `](${url})`)
+}
+
 function saveDraft() {
-  const currentBody = bodyRef.value?.innerText || ''
-  const toEmails = toChips.value.map(c => c.email).join(', ') || toInput.value
-  
   const newDraft: SavedDraft = {
     id: `draft_${Date.now()}`,
-    subject: subject.value || '(No Subject)',
-    to: toEmails || 'Draft Recipient',
-    body: currentBody,
-    toChips: [...toChips.value],
-    ccChips: [...ccChips.value],
-    bccChips: [...bccChips.value],
+    subject: subject.value.trim() || '(No Subject)',
+    body: body.value,
+    toChips: toChips.value.map(chip => ({ ...chip })),
+    ccChips: ccChips.value.map(chip => ({ ...chip })),
+    bccChips: bccChips.value.map(chip => ({ ...chip })),
     time: 'Just now'
   }
-  
+
   savedDrafts.value.unshift(newDraft)
-  
   draftSaved.value = true
-  setTimeout(() => { draftSaved.value = false }, 2500)
+  window.setTimeout(() => {
+    draftSaved.value = false
+  }, 1800)
 }
 
 function loadDraft(draft: SavedDraft) {
-  subject.value = draft.subject
-  toChips.value = [...draft.toChips]
-  ccChips.value = [...draft.ccChips]
-  bccChips.value = [...draft.bccChips]
-  
-  showCc.value = draft.ccChips.length > 0
-  showBcc.value = draft.bccChips.length > 0
-  
-  if (bodyRef.value) {
-    bodyRef.value.innerText = draft.body
-    bodyIsEmpty.value = !draft.body.trim()
-  }
-  
+  subject.value = draft.subject === '(No Subject)' ? '' : draft.subject
+  body.value = draft.body
+  toChips.value = draft.toChips.map(chip => ({ ...chip }))
+  ccChips.value = draft.ccChips.map(chip => ({ ...chip }))
+  bccChips.value = draft.bccChips.map(chip => ({ ...chip }))
+  showCc.value = ccChips.value.length > 0
+  showBcc.value = bccChips.value.length > 0
   showDraftsDropdown.value = false
+  nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
 }
 
-// ─── Bubbles AI Inline Assistant State ───────────────────────────────────────
-const showAiWidget = ref(true) // Display by default below the body
-const aiActiveTab = ref<'scratch' | 'refine'>('scratch')
-const aiPrompt = ref('')
-const aiTone = ref('professional')
-const isAiGenerating = ref(false)
-const aiStatusText = ref('Standing by')
+function startVoiceInput() {
+  if (aiDraftState.value === 'generating') return
+  aiDraftState.value = 'dictating'
+}
 
-const getSenderName = () => {
-  if (fromAccount.value === 'thenormvg@gmail.com') return 'Norm'
-  if (fromAccount.value === 'vishnuarunkmgupta@gmail.com') return 'Vishnu Gupta'
+function stopVoiceInput() {
+  aiDraftState.value = 'empty'
+  aiPrompt.value = aiPrompt.value.trim()
+    ? aiPrompt.value
+    : 'Draft a clear, warm email that confirms next steps and asks for a quick sync.'
+  nextTick(() => autosizeTextarea(aiPromptRef.value, 160))
+}
+
+function senderName() {
+  if (visibleFromAccount.value === 'thenormvg@gmail.com') return 'Norm'
+  if (visibleFromAccount.value === 'vishnuarunkmgupta@gmail.com') return 'Vishnu Gupta'
   return 'HQ Team'
 }
 
-const aiTemplates = [
-  { label: 'Project Sync', text: 'Request a brief sync tomorrow regarding our QA progress and Tauri builds.' },
-  { label: 'Follow Up', text: 'Follow up on the strategic partnership proposal sent last week.' },
-  { label: 'Polite Decline', text: 'Politely decline the speaker invitation for next month\'s tech summit.' },
-  { label: 'Urgent Alert', text: 'Escalate a production incident concerning socket timeouts and high CPU.' }
-]
+function buildAiDraft() {
+  const prompt = aiPrompt.value.trim()
+  const recipient = toChips.value[0]?.email.split('@')[0] || 'there'
+  const name = senderName()
+  const attachmentLine = aiAttachedFiles.value.length
+    ? `\n\nI have included ${aiAttachedFiles.value.length === 1 ? 'the attached file' : 'the attached files'} for context.`
+    : ''
 
-function selectTemplate(text: string) {
-  aiPrompt.value = text
-  generateAiDraft()
-}
-
-function toggleAiWidget() {
-  showAiWidget.value = !showAiWidget.value
-}
-
-function buildCustomDraft(prompt: string, tone: string) {
-  const p = prompt.trim()
-  const name = getSenderName()
-  let subjectStr = ''
-  let bodyStr = ''
-  
-  if (tone === 'professional') {
-    subjectStr = `Discussion on: ${p.slice(0, 30)}${p.length > 30 ? '...' : ''}`
-    bodyStr = `Hi,\n\nI hope you are doing well.\n\nI am writing to discuss "${p}". I would appreciate it if we could schedule a brief moment to connect on this, or if you could provide additional details.\n\nPlease let me know your thoughts or availability.\n\nBest regards,\n${name}`
-  } else if (tone === 'friendly') {
-    subjectStr = `Quick chat about ${p.slice(0, 25)}${p.length > 25 ? '...' : ''}`
-    bodyStr = `Hi there!\n\nI hope you're having an awesome week. I wanted to reach out quickly to check in regarding "${p}".\n\nLet me know if you have some free time to sync up soon!\n\nWarmly,\n${name}`
-  } else if (tone === 'direct') {
-    subjectStr = `Update: ${p.slice(0, 30)}${p.length > 30 ? '...' : ''}`
-    bodyStr = `Hello,\n\nRegarding "${p}":\n\nPlease let me know the current status at your earliest convenience so we can align before our next sprint milestone.\n\nThanks,\n${name}`
-  } else {
-    subjectStr = `Strategic Opportunity: ${p.slice(0, 25)}${p.length > 25 ? '...' : ''}`
-    bodyStr = `Dear partner,\n\nI wanted to share a compelling opportunity regarding "${p}".\n\nBy leveraging this approach, we can streamline resource allocation, bypass build bottlenecks, and secure substantial value. I'd love to share the blueprint during a brief sync.\n\nBest regards,\n${name}`
+  if (!prompt) {
+    return `Subject: Quick update\n\nHi ${recipient},\n\nI hope this message finds you well. I wanted to reach out regarding our current priorities and make sure we are aligned on next steps.${attachmentLine}\n\nPlease let me know when you are available for a quick sync.\n\nBest regards,\n${name}`
   }
-  return { subject: subjectStr, body: bodyStr }
-}
 
-function buildRefinedDraft(editorText: string, tone: string) {
-  const name = getSenderName()
-  let bodyStr = ''
-  
-  if (tone === 'professional') {
-    bodyStr = `Dear Recipient,\n\nI hope this message finds you well. I am writing to convey the following details:\n\n${editorText}\n\nThank you for your time, and please let me know if you require any additional information.\n\nBest regards,\n${name}`
-  } else if (tone === 'friendly') {
-    bodyStr = `Hi there!\n\nI hope you're having a great day. I wanted to reach out and share a quick update:\n\n${editorText}\n\nLet me know what you think when you get a chance!\n\nWarmly,\n${name}`
-  } else if (tone === 'direct') {
-    bodyStr = `Hello,\n\nHere are the updated details for your review:\n\n${editorText}\n\nLet me know if there are any immediate blocking items.\n\nThanks,\n${name}`
-  } else {
-    bodyStr = `Hi,\n\nI wanted to bring this technical summary to your attention:\n\n${editorText}\n\nImplementing these adjustments will significantly optimize our production builds and latency rates. I look forward to working together on this.\n\nBest regards,\n${name}`
+  if (/decline|invite|invitation/i.test(prompt)) {
+    return `Subject: Re: Invitation\n\nHi ${recipient},\n\nThank you for the invitation. I appreciate you thinking of me, but I will need to politely decline this time due to current production milestones.${attachmentLine}\n\nPlease keep me in mind for future opportunities.\n\nBest regards,\n${name}`
   }
-  return { subject: subject.value || 'Refined Subject', body: bodyStr }
+
+  if (/follow|proposal|partnership/i.test(prompt)) {
+    return `Subject: Following up on the proposal\n\nHi ${recipient},\n\nI wanted to follow up on the proposal and see whether you had a chance to review the details. We are finalizing the next planning cycle and your feedback would be helpful.${attachmentLine}\n\nHappy to schedule a quick call this week if easier.\n\nBest,\n${name}`
+  }
+
+  if (/sync|qa|review|meeting/i.test(prompt)) {
+    return `Subject: Technical alignment sync\n\nHi ${recipient},\n\nI would like to schedule a short alignment sync to review the current QA milestones, product priorities, and any blockers before the next release window.${attachmentLine}\n\nWould 10:00 AM or 2:00 PM work for you?\n\nBest,\n${name}`
+  }
+
+  return `Subject: ${prompt.slice(0, 48)}${prompt.length > 48 ? '...' : ''}\n\nHi ${recipient},\n\nI hope you are doing well. I am writing regarding "${prompt}".${attachmentLine}\n\nPlease let me know what timing works best for you, and I can coordinate from there.\n\nBest regards,\n${name}`
 }
 
 function generateAiDraft() {
-  if (aiActiveTab.value === 'scratch' && !aiPrompt.value.trim()) return
-  
-  isAiGenerating.value = true
-  aiStatusText.value = 'Scanning workspace...'
-  
-  const statusMessages = [
-    'Scanning details...',
-    'Consulting models...',
-    'Polishing phrasing...',
-    'Perfecting flow...'
-  ]
-  
-  let msgIdx = 0
-  const statusInterval = setInterval(() => {
-    msgIdx++
-    if (msgIdx < statusMessages.length) {
-      aiStatusText.value = statusMessages[msgIdx]
-    } else {
-      clearInterval(statusInterval)
-      
-      let finalSubject = ''
-      let finalBody = ''
-      
-      if (aiActiveTab.value === 'scratch') {
-        const lowerPrompt = aiPrompt.value.toLowerCase()
-        if (lowerPrompt.includes('sync') || lowerPrompt.includes('qa')) {
-          finalSubject = 'Technical Alignment Sync - QA & Core Pipelines'
-          finalBody = `Hi Team,\n\nI hope you're having a productive week. I'd like to schedule a brief alignment sync tomorrow to review our recent QA milestones and core developer infrastructure improvements.\n\nSpecifically, I'd like to align on:\n1. Post-launch QA coverage targets.\n2. Key bottlenecks in our Tauri cross-platform build pipeline.\n3. Allocating resources for SQL database local caching.\n\nPlease let me know if a 30-minute slot at 10:00 AM or 2:00 PM works for you.\n\nBest,\n${getSenderName()}`
-        } else if (lowerPrompt.includes('decline') || lowerPrompt.includes('invite')) {
-          finalSubject = 'Invitation to Speak - Tech Conference'
-          finalBody = `Hi there,\n\nThank you sincerely for the invitation to speak at the upcoming technology summit next month. It sounds like an incredible gathering of developers and designers.\n\nUnfortunately, due to intensive production milestones and our upcoming Q2 launch schedule, I will have to politely decline this time. I want to ensure my team has undivided support during this critical sprint.\n\nLet's definitely stay in touch for future events!\n\nBest regards,\n${getSenderName()}`
-        } else if (lowerPrompt.includes('proposal') || lowerPrompt.includes('follow')) {
-          finalSubject = 'Following Up: Strategic Partnership Proposal'
-          finalBody = `Hi there,\n\nI wanted to send a quick note to follow up on the strategic partnership proposal I sent over last Tuesday. We are currently finalizing our advisory roadmap and would love to hear your initial thoughts.\n\nI'm happy to hop on a quick call to address any questions you or your team might have.\n\nLooking forward to hearing from you.\n\nWarmly,\n${getSenderName()}`
-        } else if (lowerPrompt.includes('urgent') || lowerPrompt.includes('alert') || lowerPrompt.includes('incident')) {
-          finalSubject = 'URGENT: Production Server Uptime Warning'
-          finalBody = `Hi Team,\n\nI am escalating a critical system report concerning our production instance latency. We are experiencing intermittent socket timeouts and the CPU utilization has crossed 92%.\n\nAll on-call developers, please join the primary incident bridge immediately to debug the caching layers.\n\nThank you for your prompt response,\n${getSenderName()}`
-        } else {
-          const { subject: s, body: b } = buildCustomDraft(aiPrompt.value, aiTone.value)
-          finalSubject = s
-          finalBody = b
-        }
-      } else {
-        const editorText = bodyRef.value?.innerText || ''
-        if (!editorText.trim()) {
-          isAiGenerating.value = false
-          aiStatusText.value = 'Standing by'
-          alert('Please write some text in the email editor first to refine.')
-          return
-        }
-        const { subject: s, body: b } = buildRefinedDraft(editorText, aiTone.value)
-        finalSubject = s
-        finalBody = b
-      }
-      
-      typeTextDirectly(finalBody, finalSubject)
+  if (aiDraftState.value === 'generating') return
+
+  aiDraftState.value = 'generating'
+  aiDraft.value = ''
+  const target = buildAiDraft()
+  let index = 0
+
+  const interval = window.setInterval(() => {
+    const chunk = target.slice(index, index + 4)
+    aiDraft.value += chunk
+    index += chunk.length
+    nextTick(() => {
+      autosizeTextarea(aiDraftRef.value, 380)
+      if (aiDraftRef.value) aiDraftRef.value.scrollTop = aiDraftRef.value.scrollHeight
+    })
+
+    if (index >= target.length) {
+      window.clearInterval(interval)
+      aiDraftState.value = 'drafted'
+      nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
     }
-  }, 350)
+  }, 12)
 }
 
-let typingInterval: NodeJS.Timeout | null = null
+function discardAiDraft() {
+  aiPrompt.value = ''
+  aiDraft.value = ''
+  aiAttachedFiles.value = []
+  aiDraftState.value = 'empty'
+  nextTick(() => {
+    autosizeTextarea(aiPromptRef.value, 160)
+    autosizeTextarea(aiDraftRef.value, 380)
+  })
+}
 
-function typeTextDirectly(targetBody: string, targetSubject: string) {
-  if (typingInterval) clearInterval(typingInterval)
-  
-  if (bodyRef.value) {
-    bodyRef.value.innerText = ''
-    bodyIsEmpty.value = false
-  }
-  if (targetSubject) {
-    subject.value = ''
-  }
-  
-  aiStatusText.value = 'Streaming draft...'
-  let bodyIdx = 0
-  let subjectIdx = 0
-  
-  if (targetSubject) {
-    const sInt = setInterval(() => {
-      if (subjectIdx < targetSubject.length) {
-        subject.value += targetSubject[subjectIdx]
-        subjectIdx++
-      } else {
-        clearInterval(sInt)
-        startBodyStreaming()
-      }
-    }, 8)
+function applyAiDraft() {
+  const lines = aiDraft.value.split('\n')
+  const subjectIndex = lines.findIndex(line => /^Subject:/i.test(line))
+
+  if (subjectIndex >= 0) {
+    subject.value = lines[subjectIndex].replace(/^Subject:\s*/i, '').trim()
+    body.value = lines.slice(subjectIndex + 1).join('\n').trimStart()
   } else {
-    startBodyStreaming()
+    body.value = aiDraft.value
   }
 
-  function startBodyStreaming() {
-    typingInterval = setInterval(() => {
-      if (bodyRef.value && bodyIdx < targetBody.length) {
-        const chunk = targetBody.slice(bodyIdx, bodyIdx + 5)
-        bodyRef.value.innerText += chunk
-        bodyIdx += chunk.length
-      } else {
-        if (typingInterval) clearInterval(typingInterval)
-        isAiGenerating.value = false
-        aiStatusText.value = 'Standing by'
-        aiPrompt.value = ''
-      }
-    }, 12)
-  }
+  aiShowApplied.value = true
+  nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
+  window.setTimeout(() => {
+    aiShowApplied.value = false
+    discardAiDraft()
+  }, 1200)
+}
+
+function handleSend() {
+  if (!canSend.value) return
+  sent.value = true
+  window.setTimeout(() => {
+    sent.value = false
+    goBack()
+  }, 900)
 }
 </script>
 
 <template>
   <section class="pane pane-right compose-root">
-
-    <!-- ── Header (Matching pane-header aesthetic) ─────────────────────────── -->
-    <div class="pane-header compose-header">
+    <div class="pane-header middle-header">
       <div class="header-left">
-        <span class="pane-title">New Email</span>
-        
-        <!-- Saved Drafts Trigger Dropdown -->
-        <div class="drafts-dropdown-wrapper">
-          <button class="view-toggle-btn secondary drafts-trigger-btn" @click="showDraftsDropdown = !showDraftsDropdown">
-            <FileText :size="13" />
-            <span>Saved Drafts</span>
-            <ChevronDown :size="12" class="dropdown-chevron" />
-          </button>
-          
-          <Transition name="dropdown">
-            <div v-if="showDraftsDropdown" class="drafts-dropdown">
-              <div class="drafts-dropdown-header">
-                <span>Select a Saved Draft</span>
-              </div>
-              <div v-if="savedDrafts.length === 0" class="draft-option empty-drafts">
-                No drafts saved yet.
-              </div>
-              <div
-                v-for="draft in savedDrafts"
-                :key="draft.id"
-                class="draft-option"
-                @click="loadDraft(draft)"
-              >
-                <div class="draft-option-title">{{ draft.subject || '(No Subject)' }}</div>
-                <div class="draft-option-meta">
-                  <span class="draft-to-lbl">To: {{ draft.to || 'No recipient' }}</span>
-                  <span class="draft-time">{{ draft.time }}</span>
-                </div>
-              </div>
-            </div>
-          </Transition>
-        </div>
+        <SquarePen :size="15" class="header-icon" />
+        <span class="header-title">Compose</span>
       </div>
 
       <div class="header-right">
-        <span v-if="draftSaved" class="draft-saved-label animate-fade-in">
-          <FileText :size="12" /> Draft saved
-        </span>
-        
-        <!-- Premium AI Trigger Button matching Email Details look -->
-        <button 
-          class="view-toggle-btn ai-toggle-header-btn" 
-          :class="showAiWidget ? 'accent active' : 'secondary'"
-          @click="toggleAiWidget"
-          title="Toggle Bubbles.ai Copilot"
+        <div class="drafts-menu">
+          <button type="button" class="header-trigger-btn" @click="showDraftsDropdown = !showDraftsDropdown">
+            <FileText :size="13" />
+            <span>Saved Drafts</span>
+            <ChevronDown :size="13" />
+          </button>
+
+          <Transition name="dropdown">
+            <div v-if="showDraftsDropdown" class="drafts-dropdown">
+              <button
+                v-for="draft in savedDrafts"
+                :key="draft.id"
+                type="button"
+                class="draft-item"
+                @click="loadDraft(draft)"
+              >
+                <span class="draft-subject">{{ draft.subject }}</span>
+                <span class="draft-meta">{{ draft.toChips[0]?.email || 'No recipient' }} · {{ draft.time }}</span>
+              </button>
+            </div>
+          </Transition>
+        </div>
+
+        <button
+          type="button"
+          class="header-trigger-btn ai-toggle-btn"
+          :class="{ active: showAiPanel }"
+          :title="showAiPanel ? 'Hide Bubbles.ai composer' : 'Show Bubbles.ai composer'"
+          @click="showAiPanel = !showAiPanel"
         >
-          <Sparkles :size="13" class="sparkle-icon" />
-          <span>Bubbles.ai</span>
+          <Sparkles :size="13" />
+          <span>AI</span>
         </button>
       </div>
     </div>
 
-    <!-- ── Compose Sheet Full-Width Layout ──────────────────────────────────── -->
-    <div class="compose-sheet-wrapper">
-      
-      <!-- MAIN EMAIL SHEET -->
+    <div class="compose-scroll">
       <div class="compose-sheet">
-
-        <!-- FROM -->
-        <div class="field-row">
+        <div class="field-row from-row">
           <span class="field-label">From</span>
-          <div class="from-selector" @click="showFromDropdown = !showFromDropdown">
-            <span class="from-email">{{ fromAccount }}</span>
-            <ChevronDown :size="13" class="from-chevron" />
+          <div class="from-account-menu">
+            <button type="button" class="from-account" @click="showFromDropdown = !showFromDropdown">
+              <span class="account-dot">{{ visibleFromAccount.slice(0, 1).toUpperCase() }}</span>
+              <span>{{ visibleFromAccount }}</span>
+              <ChevronDown :size="13" class="from-chevron" />
+            </button>
+
             <Transition name="dropdown">
               <div v-if="showFromDropdown" class="from-dropdown">
-                <div
-                  v-for="acc in accounts"
-                  :key="acc"
+                <button
+                  v-for="account in fromAccounts"
+                  :key="account"
+                  type="button"
                   class="from-option"
-                  :class="{ 'active': acc === fromAccount }"
-                  @click.stop="fromAccount = acc; showFromDropdown = false"
+                  :class="{ selected: account === visibleFromAccount }"
+                  @click="selectFromAccount(account)"
                 >
-                  {{ acc }}
-                </div>
+                  <span class="account-dot option-dot">{{ account.slice(0, 1).toUpperCase() }}</span>
+                  <span class="from-option-copy">
+                    <span class="from-option-name">{{ account.split('@')[0] }}</span>
+                    <span class="from-option-email">{{ account }}</span>
+                  </span>
+                  <Check v-if="account === visibleFromAccount" :size="14" class="from-option-check" />
+                </button>
               </div>
             </Transition>
           </div>
@@ -448,992 +486,1775 @@ function typeTextDirectly(targetBody: string, targetSubject: string) {
 
         <div class="field-divider" />
 
-        <!-- TO -->
         <div class="field-row chip-row">
           <span class="field-label">To</span>
-          <div class="chips-input-area" @click="toInputRef?.focus()">
-            <TransitionGroup name="chip-anim" tag="div" class="chips-list">
-              <span
-                v-for="chip in toChips"
-                :key="chip.id"
-                class="chip"
-                :class="{ 'chip-invalid': !chip.valid }"
-              >
-                {{ chip.email }}
-                <button class="chip-remove" @click.stop="removeChip(toChips, chip.id)">
-                  <X :size="10" />
-                </button>
-              </span>
-            </TransitionGroup>
+          <div class="chips-input" @click="toInputRef?.focus()">
+            <span v-for="chip in toChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
+              {{ chip.email }}
+              <button type="button" class="chip-remove" @click.stop="removeChip(toChips, chip.id)">
+                <X :size="10" />
+              </button>
+            </span>
             <input
               ref="toInputRef"
               v-model="toInput"
-              class="chip-text-input"
               type="text"
+              class="chip-text-input"
               placeholder="Add recipient..."
               @keydown="handleChipKeydown($event, toChips, toInput, toInputRef)"
               @blur="addChip(toChips, toInput, toInputRef)"
-            />
+            >
           </div>
-          <div class="cc-bcc-toggles">
-            <button v-if="!showCc"  class="cc-toggle-btn" @click="showCc = true">Cc</button>
-            <button v-if="!showBcc" class="cc-toggle-btn" @click="showBcc = true">Bcc</button>
+          <div class="cc-actions">
+            <button v-if="!showCc" type="button" class="mini-field-btn" @click="showCc = true">Cc</button>
+            <button v-if="!showBcc" type="button" class="mini-field-btn" @click="showBcc = true">Bcc</button>
           </div>
         </div>
 
-        <!-- CC -->
         <Transition name="field-slide">
-          <div v-if="showCc">
+          <div v-if="showCc" class="optional-field">
             <div class="field-divider" />
             <div class="field-row chip-row">
               <span class="field-label">Cc</span>
-              <div class="chips-input-area" @click="ccInputRef?.focus()">
-                <TransitionGroup name="chip-anim" tag="div" class="chips-list">
-                  <span v-for="chip in ccChips" :key="chip.id" class="chip" :class="{ 'chip-invalid': !chip.valid }">
-                    {{ chip.email }}
-                    <button class="chip-remove" @click.stop="removeChip(ccChips, chip.id)"><X :size="10" /></button>
-                  </span>
-                </TransitionGroup>
+              <div class="chips-input" @click="ccInputRef?.focus()">
+                <span v-for="chip in ccChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
+                  {{ chip.email }}
+                  <button type="button" class="chip-remove" @click.stop="removeChip(ccChips, chip.id)">
+                    <X :size="10" />
+                  </button>
+                </span>
                 <input
                   ref="ccInputRef"
                   v-model="ccInput"
-                  class="chip-text-input"
                   type="text"
-                  placeholder="Add CC recipient..."
+                  class="chip-text-input"
+                  placeholder="Add CC..."
                   @keydown="handleChipKeydown($event, ccChips, ccInput, ccInputRef)"
                   @blur="addChip(ccChips, ccInput, ccInputRef)"
-                />
+                >
               </div>
-              <button class="cc-toggle-btn close-cc" @click="showCc = false; ccChips = []"><X :size="12" /></button>
+              <button type="button" class="icon-clear-btn" @click="showCc = false; ccChips = []">
+                <X :size="13" />
+              </button>
             </div>
           </div>
         </Transition>
 
-        <!-- BCC -->
         <Transition name="field-slide">
-          <div v-if="showBcc">
+          <div v-if="showBcc" class="optional-field">
             <div class="field-divider" />
             <div class="field-row chip-row">
               <span class="field-label">Bcc</span>
-              <div class="chips-input-area" @click="bccInputRef?.focus()">
-                <TransitionGroup name="chip-anim" tag="div" class="chips-list">
-                  <span v-for="chip in bccChips" :key="chip.id" class="chip" :class="{ 'chip-invalid': !chip.valid }">
-                    {{ chip.email }}
-                    <button class="chip-remove" @click.stop="removeChip(bccChips, chip.id)"><X :size="10" /></button>
-                  </span>
-                </TransitionGroup>
+              <div class="chips-input" @click="bccInputRef?.focus()">
+                <span v-for="chip in bccChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
+                  {{ chip.email }}
+                  <button type="button" class="chip-remove" @click.stop="removeChip(bccChips, chip.id)">
+                    <X :size="10" />
+                  </button>
+                </span>
                 <input
                   ref="bccInputRef"
                   v-model="bccInput"
-                  class="chip-text-input"
                   type="text"
-                  placeholder="Add BCC recipient..."
+                  class="chip-text-input"
+                  placeholder="Add BCC..."
                   @keydown="handleChipKeydown($event, bccChips, bccInput, bccInputRef)"
                   @blur="addChip(bccChips, bccInput, bccInputRef)"
-                />
+                >
               </div>
-              <button class="cc-toggle-btn close-cc" @click="showBcc = false; bccChips = []"><X :size="12" /></button>
+              <button type="button" class="icon-clear-btn" @click="showBcc = false; bccChips = []">
+                <X :size="13" />
+              </button>
             </div>
           </div>
         </Transition>
 
         <div class="field-divider" />
 
-        <!-- SUBJECT -->
         <div class="field-row">
           <span class="field-label">Subject</span>
-          <input
-            v-model="subject"
-            class="subject-input"
-            type="text"
-            placeholder="Subject"
-          />
+          <input v-model="subject" class="subject-input" type="text" placeholder="Subject">
         </div>
 
-        <div class="field-divider" />
-
-        <!-- FORMATTING TOOLBAR -->
         <div class="format-toolbar">
-          <button class="fmt-btn" title="Bold"          @click="execFmt('bold')"><Bold :size="14" /></button>
-          <button class="fmt-btn" title="Italic"        @click="execFmt('italic')"><Italic :size="14" /></button>
-          <button class="fmt-btn" title="Underline"     @click="execFmt('underline')"><Underline :size="14" /></button>
-          <div class="fmt-sep" />
-          <button class="fmt-btn" title="Bullet list"   @click="execFmt('insertUnorderedList')"><List :size="14" /></button>
-          <button class="fmt-btn" title="Numbered list" @click="execFmt('insertOrderedList')"><ListOrdered :size="14" /></button>
-          <div class="fmt-sep" />
-          <button class="fmt-btn" title="Insert link"   @click="insertLink"><Link :size="14" /></button>
+          <button type="button" class="fmt-btn" title="Bold" @click="wrapSelection('**', '**')">
+            <Bold :size="14" />
+          </button>
+          <button type="button" class="fmt-btn" title="Italic" @click="wrapSelection('_', '_')">
+            <Italic :size="14" />
+          </button>
+          <button type="button" class="fmt-btn" title="Underline" @click="wrapSelection('<u>', '</u>')">
+            <UnderlineIcon :size="14" />
+          </button>
+          <span class="fmt-separator" />
+          <button type="button" class="fmt-btn" title="Bullet list" @click="insertLinePrefix('- ')">
+            <List :size="14" />
+          </button>
+          <button type="button" class="fmt-btn" title="Numbered list" @click="insertLinePrefix('1. ')">
+            <ListOrdered :size="14" />
+          </button>
+          <span class="fmt-separator" />
+          <button type="button" class="fmt-btn" title="Insert link" @click="insertLink">
+            <Link :size="14" />
+          </button>
         </div>
 
-        <!-- BODY -->
-        <div class="body-wrapper">
-          <div
-            ref="bodyRef"
-            class="body-editor"
-            contenteditable="true"
-            @input="onBodyInput"
+        <label class="body-editor-shell">
+          <textarea
+            ref="bodyTextareaRef"
+            v-model="body"
+            class="body-textarea"
+            placeholder="Write your message here..."
             spellcheck="true"
+            @input="onBodyInput"
           />
-          <span v-if="bodyIsEmpty" class="body-placeholder">Write your message here…</span>
+        </label>
+
+        <div v-if="attachments.length" class="attachment-list">
+          <div v-for="(file, index) in attachments" :key="`${file.name}_${index}`" class="attachment-chip">
+            <Paperclip :size="12" />
+            <span class="attachment-name">{{ file.name }}</span>
+            <span class="attachment-size">{{ file.size }}</span>
+            <button type="button" class="chip-remove" @click="removeAttachment(index)">
+              <X :size="10" />
+            </button>
+          </div>
         </div>
 
-        <!-- CONTEXTUAL INLINE AI COPILOT WIDGET (Email Detail Layout Style, Emojiless) -->
         <Transition name="widget-slide">
-          <div v-if="showAiWidget" class="ai-inline-widget">
-            
-            <!-- Quick Actions Prompt Templates -->
-            <div class="ai-widget-section">
-              <div class="ai-widget-templates">
-                <button
-                  v-for="tpl in aiTemplates"
-                  :key="tpl.label"
-                  class="ai-tpl-chip"
-                  @click="selectTemplate(tpl.text)"
-                  :disabled="isAiGenerating"
-                >
-                  {{ tpl.label }}
-                </button>
+          <div v-if="showAiPanel" class="quick-reply-box">
+            <div v-if="aiShowApplied" class="send-success-overlay flex-center animate-fade-in">
+              <div class="success-content flex-center">
+                <span class="success-icon flex-center"><Check :size="18" /></span>
+                <span class="success-message">Draft applied to editor!</span>
               </div>
             </div>
 
-            <!-- Double-box design matching EmailDetail instructions area -->
-            <div class="ai-double-box-outer" :class="{ 'is-thinking': isAiGenerating }">
-              <div class="ai-input-card">
-                <!-- Textarea -->
-                <textarea
-                  v-model="aiPrompt"
-                  class="ai-widget-prompt-input"
-                  placeholder="Dump your mind, let me manage"
-                  :disabled="isAiGenerating"
-                />
+            <div class="reply-header">
+              <div class="reply-header-left">
+                <span class="reply-label">Compose</span>
+                <span class="reply-target">with Bubbles.ai</span>
+              </div>
+              <span class="reply-stage-badge" :class="aiDraftState">
+                {{ aiDraftState === 'empty' ? 'Drafting Stage' : aiDraftState === 'dictating' ? 'Voice Input' : aiDraftState === 'generating' ? 'Drafting...' : 'Review Draft' }}
+              </span>
+            </div>
 
-                <!-- Card toolbar action row -->
-                <div class="ai-card-toolbar-row">
-                  <div class="ai-toolbar-left">
-                    <div class="ai-tone-chips-list">
-                      <button 
-                        v-for="tone in ['professional', 'friendly', 'direct', 'persuasive']"
-                        :key="tone"
-                        class="ai-tone-chip"
-                        :class="{ 'active': aiTone === tone }"
-                        @click="aiTone = tone"
-                        :disabled="isAiGenerating"
-                      >
-                        {{ tone.charAt(0).toUpperCase() + tone.slice(1) }}
+            <div v-if="aiDraftState === 'empty' || aiDraftState === 'dictating'" class="input-stage-container animate-fade-in">
+              <input ref="aiFileInputRef" type="file" multiple class="hidden-file-input" @change="handleAiFileSelect">
+
+              <div class="double-box-outer" :class="{ 'is-recording': aiDraftState === 'dictating' }">
+                <div class="reply-input-card">
+                  <div v-if="aiAttachedFiles.length > 0 && aiDraftState !== 'dictating'" class="attachment-chips-row animate-fade-in">
+                    <div v-for="(file, index) in aiAttachedFiles" :key="`${file.name}_ai_${index}`" class="attached-chip">
+                      <FileText :size="11" class="chip-file-icon" />
+                      <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
+                      <span class="chip-file-size">{{ file.size }}</span>
+                      <button type="button" class="remove-chip-btn flex-center" @click="removeAiAttachment(index)">
+                        <X :size="10" />
                       </button>
                     </div>
                   </div>
 
-                  <div class="ai-toolbar-right">
-                    <!-- Action select tab -->
-                    <select v-model="aiActiveTab" class="ai-tab-select" :disabled="isAiGenerating">
-                      <option value="scratch">Write New Draft</option>
-                      <option value="refine">Refine Current Email</option>
-                    </select>
+                  <textarea
+                    v-if="aiDraftState !== 'dictating'"
+                    ref="aiPromptRef"
+                    v-model="aiPrompt"
+                    placeholder="Dump you mind, let me manage"
+                    class="reply-textarea"
+                    rows="1"
+                    @input="onAiPromptInput"
+                  />
 
-                    <!-- Generate button -->
-                    <button 
-                      class="ai-widget-generate-btn" 
-                      @click="generateAiDraft"
-                      :disabled="isAiGenerating || (aiActiveTab === 'scratch' && !aiPrompt.trim())"
-                    >
-                      <RefreshCw v-if="isAiGenerating" :size="12" class="spin-icon" />
-                      <Sparkles v-else :size="12" />
-                      <span>{{ isAiGenerating ? aiStatusText : 'Auto-draft' }}</span>
-                    </button>
+                  <div v-else class="dictating-pulse-row animate-fade-in">
+                    <span class="recording-pulsing-dot" />
+                    <span class="dictating-status-text">Listening... Speak now</span>
+                    <div class="mini-voice-wave flex-center">
+                      <span class="wave-pillar p1" />
+                      <span class="wave-pillar p2" />
+                      <span class="wave-pillar p3" />
+                      <span class="wave-pillar p4" />
+                    </div>
+                    <button type="button" class="stop-dictate-btn" @click="stopVoiceInput">Stop</button>
+                  </div>
+
+                  <div class="card-toolbar-row">
+                    <div class="toolbar-left-actions">
+                      <button type="button" class="toolbar-icon-btn flex-center" title="Attach files" :disabled="aiDraftState === 'dictating'" @click="triggerAiAttach">
+                        <Paperclip :size="15" />
+                      </button>
+                      <button type="button" class="toolbar-icon-btn flex-center" :class="{ 'recording-active': aiDraftState === 'dictating' }" title="Voice dictation" @click="startVoiceInput">
+                        <Mic v-if="aiDraftState !== 'dictating'" :size="15" />
+                        <MicOff v-else :size="15" />
+                      </button>
+                    </div>
+
+                    <div class="toolbar-right-actions">
+                      <button type="button" class="card-outline-draft-btn flex-center" :disabled="aiDraftState === 'dictating'" title="Auto-draft instantly from context" @click="generateAiDraft">
+                        <Sparkles :size="12" /> Auto-draft
+                      </button>
+                      <button type="button" class="card-send-btn flex-center" :disabled="(!aiPrompt.trim() && aiAttachedFiles.length === 0) || aiDraftState === 'dictating'" title="Draft with instructions" @click="generateAiDraft">
+                        <CornerUpRight :size="14" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <p class="copywriting-hint">
+                Your context above is a guide. AI will generate a professional draft for you to review and edit before sending.
+              </p>
             </div>
-            
-            <p class="copywriting-hint">
-              Your context above is a guide. AI will generate a professional draft directly in the email editor for you to review and edit before sending.
-            </p>
+
+            <div v-else-if="aiDraftState === 'generating' || aiDraftState === 'drafted'" class="drafted-stage-container animate-fade-in">
+              <div class="draft-review-card" :class="{ 'is-streaming': aiDraftState === 'generating' }">
+                <div class="draft-card-header">
+                  <span class="draft-card-title">
+                    <Sparkles v-if="aiDraftState === 'generating'" class="streaming-sparkle" :size="12" />
+                    <Wand2 v-else :size="12" />
+                    {{ aiDraftState === 'generating' ? 'AI is drafting response...' : 'Proposed Email Draft' }}
+                  </span>
+                  <span class="draft-editable-hint">
+                    {{ aiDraftState === 'generating' ? 'Streaming...' : 'Directly editable' }}
+                  </span>
+                </div>
+                <div class="draft-textarea-wrapper">
+                  <textarea
+                    ref="aiDraftRef"
+                    v-model="aiDraft"
+                    class="draft-review-textarea"
+                    placeholder="AI is compiling context and writing draft..."
+                    :disabled="aiDraftState === 'generating'"
+                    @input="onAiDraftInput"
+                  />
+                </div>
+              </div>
+
+              <p class="draft-stage-copywriting">
+                {{ aiDraftState === 'generating' ? 'Please wait while AI processes the message context and streams the email draft.' : 'Review the email above. You can tweak it directly inside the card, update your guidelines below, or apply it to the editor.' }}
+              </p>
+
+              <div v-if="aiDraftState === 'drafted'" class="refine-row">
+                <input v-model="aiPrompt" type="text" placeholder="Ask AI to refine draft (e.g., 'make it more formal' or 'shorten')..." class="refine-input" @keyup.enter="generateAiDraft">
+                <button type="button" class="refine-submit-btn flex-center" :disabled="!aiPrompt.trim()" @click="generateAiDraft">
+                  <RefreshCw :size="12" /> Update Draft
+                </button>
+              </div>
+
+              <div class="drafted-actions">
+                <button type="button" class="discard-draft-btn flex-center" :disabled="aiDraftState === 'generating'" @click="discardAiDraft">
+                  <Trash2 :size="13" /> Discard
+                </button>
+                <button type="button" class="send-final-btn flex-center" :disabled="aiDraftState === 'generating'" @click="applyAiDraft">
+                  <Check :size="13" /> Apply to Editor
+                </button>
+              </div>
+            </div>
           </div>
         </Transition>
-
-        <!-- ATTACHMENTS -->
-        <div v-if="attachments.length" class="attachments-list">
-          <div v-for="name in attachments" :key="name" class="attachment-chip">
-            <Paperclip :size="11" />
-            <span>{{ name }}</span>
-            <button class="chip-remove" @click="removeAttachment(name)"><X :size="10" /></button>
-          </div>
-        </div>
-
-        <!-- BOTTOM BAR -->
-        <div class="compose-bottom-bar">
-          <div class="bottom-left">
-            <button class="bottom-btn" title="Attach file" @click="triggerAttach">
-              <Paperclip :size="15" />
-            </button>
-            <input ref="fileInputRef" type="file" multiple class="hidden-file-input" @change="handleFileSelect" />
-          </div>
-
-          <div class="bottom-right">
-            <button class="bottom-btn text-btn" @click="saveDraft" title="Save draft">
-              <FileText :size="14" /> Save draft
-            </button>
-            <button class="bottom-btn discard-btn" @click="goBack" title="Discard">
-              <Trash2 :size="14" /> Discard
-            </button>
-            <button class="send-btn-bottom" :class="{ sent }" @click="handleSend">
-              <Send :size="14" />
-              {{ sent ? 'Sent!' : 'Send' }}
-            </button>
-          </div>
-        </div>
-
       </div>
-
     </div>
 
+    <div class="compose-bottom-bar">
+      <div class="bottom-left">
+        <button type="button" class="bottom-icon-btn" title="Attach file" @click="triggerAttach">
+          <Paperclip :size="17" />
+        </button>
+        <input ref="fileInputRef" type="file" multiple class="hidden-file-input" @change="handleFileSelect">
+        <span v-if="draftSaved" class="save-state">
+          <Check :size="13" />
+          Draft saved
+        </span>
+      </div>
+
+      <div class="bottom-right">
+        <button type="button" class="bottom-text-btn" @click="saveDraft">
+          <FileText :size="15" />
+          <span>Save draft</span>
+        </button>
+        <button type="button" class="bottom-text-btn" @click="goBack">
+          <Trash2 :size="15" />
+          <span>Discard</span>
+        </button>
+        <button type="button" class="send-btn" :class="{ sent }" :disabled="!canSend" @click="handleSend">
+          <Send v-if="!sent" :size="16" />
+          <Check v-else :size="16" />
+          <span>{{ sent ? 'Sent' : 'Send' }}</span>
+        </button>
+      </div>
+    </div>
   </section>
 </template>
 
 <style scoped>
-/* ── Root ────────────────────────────────────────────────────────────────── */
 .compose-root {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   background: var(--bg-primary);
-  overflow: hidden;
+  min-width: 0;
 }
 
-/* ── Top bar Header ──────────────────────────────────────────────────────── */
-.compose-header {
-  height: 56px;
+.middle-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
+  gap: 8px;
+}
+
+.header-left,
+.header-right,
+.bottom-left,
+.bottom-right,
+.toolbar-group {
+  display: flex;
+  align-items: center;
+}
+
+.drafts-menu {
+  position: relative;
   flex-shrink: 0;
-  padding: 0 16px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Standardized Header view-toggle-btn pattern */
-.view-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 14px;
+.header-trigger-btn,
+.ai-toggle-btn,
+.from-account,
+.mini-field-btn,
+.fmt-btn,
+.toolbar-icon-btn,
+.outline-action-btn,
+.send-icon-btn,
+.quiet-action-btn,
+.primary-action-btn,
+.bottom-icon-btn,
+.bottom-text-btn,
+.send-btn,
+.icon-clear-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   font-family: var(--font-sans);
-  font-size: 0.74rem;
-  font-weight: 550;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.header-trigger-btn {
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
-  user-select: none;
+  white-space: nowrap;
 }
 
-.view-toggle-btn.secondary {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+.ai-toggle-btn {
+  width: auto;
 }
 
-.view-toggle-btn.secondary:hover {
+.ai-toggle-btn.active {
+  background: var(--bg-tertiary);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.header-trigger-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.from-account:hover,
+.mini-field-btn:hover,
+.fmt-btn:hover,
+.toolbar-icon-btn:hover,
+.outline-action-btn:hover,
+.bottom-icon-btn:hover,
+.bottom-text-btn:hover,
+.icon-clear-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
-  border-color: var(--text-muted);
 }
 
-.view-toggle-btn.accent {
-  background: var(--active-bg);
-  border: 1px solid var(--border-color);
-  color: var(--active-text);
-  font-weight: 600;
-}
-
-.view-toggle-btn.accent:hover {
-  background: var(--bg-tertiary);
-}
-
-/* Saved Drafts Trigger Specifics */
-.drafts-dropdown-wrapper {
-  position: relative;
-}
-
-.drafts-trigger-btn {
-  margin-left: 4px;
-}
-
-.dropdown-chevron {
-  color: var(--text-secondary);
-  opacity: 0.7;
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .drafts-dropdown {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 4px;
-  z-index: 100;
-  background: var(--bg-primary);
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  padding: 8px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  min-width: 320px;
-  max-width: 360px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-lg);
 }
 
-.drafts-dropdown-header {
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.draft-option {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: background var(--transition-fast);
+.draft-item {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.draft-option:last-child {
-  border-bottom: none;
-}
-
-.draft-option:hover {
+.draft-item:hover {
   background: var(--bg-secondary);
 }
 
-.draft-option-title {
-  font-size: 0.78rem;
-  font-weight: 600;
+.draft-subject {
+  font-size: 0.82rem;
+  font-weight: 650;
   color: var(--text-primary);
-  white-space: nowrap;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.draft-option-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  gap: 12px;
-}
-
-.draft-to-lbl {
   white-space: nowrap;
+}
+
+.draft-meta {
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 170px;
-}
-
-.draft-time {
-  font-weight: 450;
-  flex-shrink: 0;
-}
-
-.empty-drafts {
-  padding: 14px;
-  font-size: 0.78rem;
   color: var(--text-muted);
-  text-align: center;
-  cursor: default;
-}
-
-.empty-drafts:hover {
-  background: transparent;
-}
-
-/* Draft Saved Label */
-.draft-saved-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   font-size: 0.72rem;
-  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ai-toggle-header-btn.active {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
-}
-
-/* ── Split Layout Wrapper (Flat architecture, flush edge-to-edge) ─────────── */
-.compose-sheet-wrapper {
+.compose-scroll {
   flex: 1;
-  overflow: hidden;
-  padding: 0; /* Flush edge-to-edge! */
-  display: flex;
-  height: calc(100% - 56px);
-  background: var(--bg-primary);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 28px;
 }
 
 .compose-sheet {
-  background: var(--bg-primary);
-  border: none;
-  border-radius: 0; /* Flat! */
-  box-shadow: none; /* Flat! */
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* ── Field rows (Stretched & Aligned edge-to-edge) ───────────────────────── */
-.field-divider {
-  height: 1px;
-  background: var(--border-color);
-  margin: 0; /* Fully horizontal span! */
-  opacity: 0.8;
+  width: min(100%, 1280px);
+  margin: 0 auto;
 }
 
 .field-row {
-  display: flex;
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 0 24px; /* Matches editor indentation */
-  min-height: 48px;
   gap: 12px;
-  position: relative;
-  background: var(--bg-primary);
+}
+
+.from-row {
+  min-height: 52px;
 }
 
 .field-label {
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  font-weight: 550;
   color: var(--text-muted);
-  flex-shrink: 0;
-  width: 52px;
+  font-size: 0.82rem;
+  font-weight: 650;
 }
 
-/* From selector dropdown dropdown */
-.from-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+.field-divider {
+  height: 1px;
+  background: var(--border-color);
+}
+
+.from-account-menu {
   position: relative;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: background var(--transition-fast);
-  user-select: none;
-  margin-left: -4px;
+  justify-self: start;
+  min-width: 0;
 }
-.from-selector:hover { background: var(--bg-secondary); }
 
-.from-email {
-  font-size: 0.83rem;
-  font-weight: 555;
-  color: var(--text-primary);
+.from-account {
+  justify-self: start;
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 5px 10px 5px 5px;
+  font-size: 0.78rem;
+  overflow: hidden;
 }
-.from-chevron { color: var(--text-secondary); opacity: 0.8; }
+
+.from-account > span:not(.account-dot) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.from-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
 
 .from-dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   left: 0;
-  z-index: 100;
-  background: var(--bg-primary);
+  z-index: 20;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  padding: 8px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-  overflow: hidden;
-  min-width: 240px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-lg);
 }
 
 .from-option {
-  padding: 8px 12px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  text-align: left;
 }
-.from-option:hover { background: var(--bg-secondary); color: var(--text-primary); }
-.from-option.active { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 500; }
 
-/* Recipient input chips */
-.chip-row { flex-wrap: wrap; align-items: flex-start; padding-top: 8px; padding-bottom: 8px; }
+.from-option:hover,
+.from-option.selected {
+  background: var(--bg-secondary);
+}
 
-.chips-input-area {
+.option-dot {
+  width: 24px;
+  height: 24px;
+}
+
+.from-option-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.from-option-name,
+.from-option-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.from-option-name {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.from-option-email {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.from-option-check {
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.account-dot {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: var(--active-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.chip-row {
+  align-items: start;
+  padding: 12px 0;
+}
+
+.chip-row .field-label {
+  padding-top: 8px;
+}
+
+.chips-input {
+  min-height: 34px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  flex: 1;
-  cursor: text;
-  min-height: 32px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.chips-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+.chip,
+.attachment-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 550;
 }
 
 .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 6px; /* Architectural rectangular */
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  transition: all var(--transition-fast);
+  padding: 4px 6px 4px 9px;
 }
-.chip-invalid {
-  background: hsl(0, 80%, 98%);
-  border-color: hsl(0, 80%, 90%);
-  color: hsl(0, 70%, 45%);
+
+.chip.invalid {
+  border-color: hsl(0, 80%, 82%);
+  background: hsl(0, 90%, 97%);
+  color: hsl(0, 72%, 42%);
 }
 
 .chip-remove {
-  display: flex;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
-  border: none;
+  color: currentColor;
   cursor: pointer;
+  opacity: 0.72;
+}
+
+.chip-remove:hover {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 1;
+}
+
+.chip-text-input,
+.subject-input,
+.refine-input {
+  min-width: 160px;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.94rem;
+}
+
+.chip-text-input::placeholder,
+.subject-input::placeholder,
+.body-textarea::placeholder,
+.ai-prompt-textarea::placeholder,
+.refine-input::placeholder {
   color: var(--text-muted);
-  padding: 1px;
-  border-radius: 4px;
-  transition: all var(--transition-fast);
 }
-.chip-remove:hover { color: var(--text-primary); background: var(--border-color); }
 
-.chip-text-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 0.83rem;
-  color: var(--text-primary);
-  min-width: 180px;
-  flex: 1;
+.cc-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 1px;
 }
-.chip-text-input::placeholder { color: var(--text-muted); }
 
-.cc-bcc-toggles {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  align-self: center;
-}
-.cc-toggle-btn {
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  display: flex;
+.mini-field-btn,
+.icon-clear-btn {
+  height: 28px;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  padding: 0 10px;
+  font-size: 0.76rem;
+  font-weight: 650;
 }
-.cc-toggle-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
-.close-cc { border-color: transparent; }
 
-/* Subject */
+.icon-clear-btn {
+  width: 28px;
+  padding: 0;
+}
+
 .subject-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 0.88rem;
-  font-weight: 555;
-  color: var(--text-primary);
+  grid-column: 2 / 4;
+  height: 54px;
+  font-size: 1rem;
 }
-.subject-input::placeholder { color: var(--text-muted); font-weight: 400; }
 
-/* Formatting toolbar */
 .format-toolbar {
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 8px 24px;
+  gap: 8px;
   border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-  background: var(--bg-primary);
+}
+
+.fmt-btn,
+.toolbar-icon-btn,
+.bottom-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
 }
 
 .fmt-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 26px;
-  border-radius: 4px;
-  border: none;
+  border-color: transparent;
   background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.fmt-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
 
-.fmt-sep {
+.fmt-separator {
   width: 1px;
-  height: 14px;
+  height: 20px;
   background: var(--border-color);
-  margin: 0 4px;
 }
 
-/* Body editor area */
-.body-wrapper {
-  position: relative;
-  flex: 1;
-  min-height: 250px;
-  display: flex;
-  flex-direction: column;
+.body-editor-shell {
+  display: block;
+  padding: 28px 0 22px;
 }
 
-.body-editor {
-  flex: 1;
-  padding: 20px 24px;
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  line-height: 1.7;
-  color: var(--text-primary);
-  outline: none;
-  min-height: 250px;
-}
-
-.body-placeholder {
-  position: absolute;
-  top: 20px;
-  left: 24px;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  pointer-events: none;
-  user-select: none;
-}
-
-/* ── CONTEXTUAL INLINE AI COPILOT WIDGET ────────────────────────────────── */
-.ai-inline-widget {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ai-widget-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ai-widget-sec-title {
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-}
-
-.ai-widget-templates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ai-tpl-chip {
-  padding: 5px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 14px; /* Standard pill suggest chips look */
-  font-family: var(--font-sans);
-  font-size: 0.74rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.ai-tpl-chip:hover:not(:disabled) {
-  background: var(--bg-secondary);
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-/* Double-box design matching EmailDetail instructions area */
-.ai-double-box-outer {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  transition: border-color var(--transition-fast);
-}
-.ai-double-box-outer:focus-within {
-  border-color: var(--text-primary);
-}
-
-.ai-input-card {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 12px;
-  gap: 8px;
-}
-
-.ai-widget-prompt-input {
+.body-textarea {
   width: 100%;
-  height: 48px;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--text-primary);
+  min-height: 260px;
+  max-height: 520px;
   resize: none;
-  line-height: 1.4;
-}
-.ai-widget-prompt-input::placeholder {
-  color: var(--text-muted);
-}
-
-.ai-card-toolbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--border-color);
-  padding-top: 8px;
-  margin-top: 4px;
-}
-
-.ai-toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-tone-chips-list {
-  display: flex;
-  gap: 4px;
-}
-
-.ai-tone-chip {
-  padding: 3px 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.ai-tone-chip:hover {
-  border-color: var(--text-muted);
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--text-primary);
-}
-.ai-tone-chip.active {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border-color: var(--text-primary);
-}
-
-.ai-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-tab-select {
-  padding: 4px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
   font-family: var(--font-sans);
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  outline: none;
-  cursor: pointer;
+  font-size: 0.98rem;
+  line-height: 1.7;
 }
 
-.ai-widget-generate-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  font-family: var(--font-sans);
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.ai-widget-generate-btn:hover:not(:disabled) {
-  background: var(--bg-secondary);
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-.ai-widget-generate-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.copywriting-hint {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-  font-family: var(--font-sans);
-}
-
-.spin-icon {
-  animation: spin 1.2s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Attachments chips */
-.attachments-list {
+.attachment-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px 24px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.attachment-list.compact {
+  margin-bottom: 8px;
 }
 
 .attachment-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--bg-secondary);
+  padding: 5px 6px 5px 9px;
+}
+
+.attachment-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-size {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.ai-compose-card {
+  position: relative;
+  margin: 6px 0 12px;
   border: 1px solid var(--border-color);
-  font-size: 0.74rem;
-  color: var(--text-secondary);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+  overflow: hidden;
 }
 
-.hidden-file-input { display: none; }
-
-/* Bottom bar action controls */
-.compose-bottom-bar {
+.ai-applied-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
-  gap: 8px;
-  background: var(--bg-primary);
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 650;
+  backdrop-filter: blur(4px);
 }
 
-.bottom-left { display: flex; align-items: center; gap: 6px; }
-.bottom-right { display: flex; align-items: center; gap: 8px; }
-
-.bottom-btn {
+.success-mark {
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: none;
+  border-radius: 50%;
+  background: hsl(142, 70%, 92%);
+  color: hsl(142, 68%, 28%);
+  border: 1px solid hsl(142, 62%, 82%);
+}
+
+.ai-card-header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-card-header div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ai-card-header strong {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+}
+
+.ai-card-header span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.stage-badge {
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-primary);
+  padding: 3px 8px;
+  color: var(--text-secondary) !important;
+  font-size: 0.72rem !important;
+  font-weight: 650;
+}
+
+.stage-badge.generating {
+  color: hsl(212, 72%, 36%) !important;
+  border-color: hsl(212, 78%, 88%);
+  background: hsl(212, 78%, 97%);
+}
+
+.stage-badge.dictating {
+  color: hsl(0, 75%, 42%) !important;
+  border-color: hsl(0, 82%, 88%);
+  background: hsl(0, 88%, 97%);
+}
+
+.stage-badge.drafted {
+  color: hsl(142, 62%, 28%) !important;
+  border-color: hsl(142, 58%, 84%);
+  background: hsl(142, 62%, 96%);
+}
+
+.ai-input-stage,
+.ai-draft-stage {
+  padding: 18px;
+}
+
+.ai-prompt-box,
+.draft-review-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-prompt-box {
+  padding: 12px;
+}
+
+.ai-prompt-box.recording {
+  border-color: hsl(0, 78%, 84%);
+  background: hsl(0, 85%, 98%);
+}
+
+.ai-prompt-textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 160px;
+  resize: none;
+  border: 0;
+  outline: 0;
   background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.bottom-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
-
-.bottom-btn.text-btn {
-  width: auto;
-  padding: 0 10px;
-  gap: 5px;
+  color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.ai-toolbar,
+.draft-actions,
+.refine-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-toolbar {
+  margin-top: 10px;
+}
+
+.toolbar-group {
+  gap: 8px;
+}
+
+.toolbar-icon-btn.active {
+  color: hsl(0, 75%, 42%);
+  border-color: hsl(0, 76%, 84%);
+  background: hsl(0, 82%, 97%);
+}
+
+.outline-action-btn,
+.quiet-action-btn,
+.primary-action-btn,
+.send-icon-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.send-icon-btn {
+  width: 34px;
+  padding: 0;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--active-text);
+}
+
+.primary-action-btn {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--active-text);
+}
+
+.quiet-action-btn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.draft-review-card.streaming {
+  border-color: hsl(212, 75%, 86%);
+}
+
+.draft-card-header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.draft-card-header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.draft-card-header em {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-style: normal;
+}
+
+.ai-draft-textarea {
+  width: 100%;
+  min-height: 180px;
+  max-height: 380px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  padding: 16px;
+}
+
+.ai-draft-textarea:disabled {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.refine-row {
+  margin-top: 12px;
+}
+
+.refine-input {
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+  padding: 0 12px;
+}
+
+.draft-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.dictation-row {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text-secondary);
+  font-size: 0.84rem;
 }
-.bottom-btn.text-btn:hover { color: var(--text-primary); }
 
-.bottom-btn.discard-btn {
-  width: auto;
-  padding: 0 10px;
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(0, 76%, 52%);
+  animation: pulse 1s infinite;
+}
+
+.voice-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+}
+
+.voice-wave span {
+  width: 3px;
+  border-radius: 999px;
+  background: hsl(0, 76%, 52%);
+  animation: wave 0.72s ease-in-out infinite;
+}
+
+.voice-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
+.voice-wave span:nth-child(2) { height: 18px; animation-delay: 0.08s; }
+.voice-wave span:nth-child(3) { height: 12px; animation-delay: 0.16s; }
+.voice-wave span:nth-child(4) { height: 20px; animation-delay: 0.24s; }
+
+.compose-bottom-bar {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0 16px;
+  backdrop-filter: blur(8px);
+}
+
+.bottom-left,
+.bottom-right {
+  gap: 12px;
+}
+
+.bottom-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.send-btn {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--active-text);
+  padding: 0 18px;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.send-btn:not(:disabled):hover,
+.send-icon-btn:not(:disabled):hover,
+.primary-action-btn:not(:disabled):hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.send-btn.sent {
+  background: hsl(142, 70%, 30%);
+  border-color: hsl(142, 70%, 30%);
+}
+
+.save-state {
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
-  font-family: var(--font-sans);
+  color: hsl(142, 62%, 30%);
   font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-weight: 650;
 }
-.bottom-btn.discard-btn:hover { color: hsl(0, 60%, 50%); background: hsl(0, 80%, 97%); }
 
-.send-btn-bottom {
+.hidden-file-input {
+  display: none;
+}
+
+.dropdown-enter-active,
+.dropdown-leave-active,
+.field-slide-enter-active,
+.field-slide-leave-active,
+.widget-slide-enter-active,
+.widget-slide-leave-active {
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to,
+.field-slide-enter-from,
+.field-slide-leave-to,
+.widget-slide-enter-from,
+.widget-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.spin-soft {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.7); }
+  50% { transform: scaleY(1.15); }
+}
+
+/* EmailDetail quick-reply parity */
+.quick-reply-box {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background-color: var(--bg-secondary);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 12px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.send-success-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.96);
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+
+.success-content {
+  flex-direction: column;
+  gap: 12px;
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.success-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: hsl(142, 70%, 90%);
+  color: hsl(142, 70%, 25%);
+  border: 1px solid hsl(142, 70%, 80%);
+}
+
+.success-message {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.reply-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.reply-header-left {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 18px;
-  border-radius: 16px;
-  border: none;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
+}
+
+.reply-label {
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.reply-target {
+  color: var(--text-muted);
+}
+
+.reply-stage-badge {
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+.reply-stage-badge.dictating {
+  background-color: hsl(0, 100%, 97%);
+  border-color: hsl(0, 100%, 90%);
+  color: hsl(0, 85%, 45%);
+}
+
+.reply-stage-badge.generating {
+  background-color: hsl(250, 100%, 98%);
+  border-color: hsl(250, 100%, 92%);
+  color: hsl(250, 80%, 45%);
+}
+
+.reply-stage-badge.drafted {
+  background-color: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.double-box-outer {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 5px;
+  width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.double-box-outer:focus-within {
+  border-color: var(--text-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.double-box-outer.is-recording {
+  background-color: hsl(0, 100%, 97%);
+  border-color: hsl(0, 80%, 90%);
+}
+
+.reply-input-card {
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background-color: var(--bg-primary);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.double-box-outer.is-recording .reply-input-card {
+  background-color: hsl(0, 100%, 99%);
+  border-color: hsl(0, 80%, 90%);
+}
+
+.reply-textarea {
+  width: 100%;
+  min-height: 24px;
+  max-height: 120px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+}
+
+.reply-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.attachment-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.attached-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  max-width: 170px;
+  overflow: hidden;
+}
+
+.chip-file-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.chip-file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.chip-file-size {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.remove-chip-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 1px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.remove-chip-btn:hover {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.card-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid transparent;
+}
+
+.toolbar-left-actions,
+.toolbar-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-fast);
+}
+
+.toolbar-icon-btn:hover:not(:disabled) {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.toolbar-icon-btn.recording-active {
+  background-color: hsl(0, 85%, 95%);
+  color: hsl(0, 85%, 45%);
+}
+
+.card-outline-draft-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  gap: 5px;
+  transition: all var(--transition-fast);
+  height: 28px;
+}
+
+.card-outline-draft-btn:hover:not(:disabled) {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+}
+
+.card-outline-draft-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.card-send-btn {
+  width: 32px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.send-btn-bottom:hover { opacity: 0.9; transform: translateY(-0.5px); }
-.send-btn-bottom.sent { background: hsl(145, 50%, 42%); }
 
-/* ── Transitions ─────────────────────────────────────────────────────────── */
-.dropdown-enter-active, .dropdown-leave-active {
-  transition: opacity 0.14s ease, transform 0.14s ease;
-}
-.dropdown-enter-from, .dropdown-leave-to {
-  opacity: 0; transform: translateY(-4px) scale(0.98);
+.reply-input-card:focus-within .card-send-btn,
+.card-send-btn:hover:not(:disabled) {
+  background-color: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-primary);
 }
 
-.chip-anim-enter-active { transition: all 0.15s ease; }
-.chip-anim-enter-from   { opacity: 0; transform: scale(0.85); }
-.chip-anim-leave-active { transition: all 0.12s ease; }
-.chip-anim-leave-to     { opacity: 0; transform: scale(0.8); }
-
-.field-slide-enter-active { transition: all 0.18s ease; }
-.field-slide-enter-from   { opacity: 0; transform: translateY(-6px); }
-.field-slide-leave-active { transition: all 0.14s ease; }
-.field-slide-leave-to     { opacity: 0; }
-
-.widget-slide-enter-active, .widget-slide-leave-active {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.card-send-btn:disabled {
+  opacity: 0.35;
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-muted) !important;
+  cursor: not-allowed;
 }
-.widget-slide-enter-from, .widget-slide-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
+
+.copywriting-hint,
+.draft-stage-copywriting {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.dictating-pulse-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 24px;
+}
+
+.recording-pulsing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: hsl(0, 85%, 50%);
+  animation: voicePulse 1.2s infinite ease-in-out;
+}
+
+.dictating-status-text {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.mini-voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 14px;
+}
+
+.wave-pillar {
+  width: 2px;
+  background-color: var(--text-primary);
+  border-radius: 1px;
+  animation: moveWave 1s infinite alternate ease-in-out;
+}
+
+.p1 { height: 6px; animation-delay: 0.1s; }
+.p2 { height: 12px; animation-delay: 0.3s; }
+.p3 { height: 8px; animation-delay: 0.2s; }
+.p4 { height: 10px; animation-delay: 0.4s; }
+
+.stop-dictate-btn {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.stop-dictate-btn:hover {
+  background-color: var(--border-color);
+}
+
+.draft-review-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  transition: all var(--transition-fast);
+}
+
+.draft-review-card.is-streaming {
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border-color);
+}
+
+.draft-card-header {
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: auto;
+}
+
+.draft-card-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draft-editable-hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.draft-textarea-wrapper {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.draft-review-textarea {
+  border: none;
+  background-color: var(--bg-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  padding: 12px;
+  min-height: 145px;
+  max-height: 380px;
+  width: 100%;
+  outline: none;
+  resize: vertical;
+  overflow-y: auto;
+}
+
+.draft-review-textarea:disabled {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.streaming-sparkle {
+  color: var(--primary-color);
+  animation: pulseSparkle 1.4s infinite ease-in-out;
+}
+
+.refine-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: center;
+  justify-content: initial;
+}
+
+.refine-input {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 32px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.refine-input:focus {
+  border-color: var(--text-primary);
+}
+
+.refine-submit-btn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 0 12px;
+  height: 32px;
+  cursor: pointer;
+  gap: 4px;
+  transition: all var(--transition-fast);
+}
+
+.refine-submit-btn:hover:not(:disabled) {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.refine-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.drafted-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.discard-draft-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.discard-draft-btn:hover:not(:disabled) {
+  border-color: hsl(0, 80%, 80%);
+  color: hsl(0, 80%, 40%);
+  background-color: hsl(0, 100%, 98%);
+}
+
+.send-final-btn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 8px;
+  padding: 7px 20px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.send-final-btn:hover:not(:disabled) {
+  background-color: var(--text-secondary);
+}
+
+.discard-draft-btn:disabled,
+.send-final-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes voicePulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.5; }
+}
+
+@keyframes moveWave {
+  from { transform: scaleY(0.6); }
+  to { transform: scaleY(1.3); }
+}
+
+@keyframes pulseSparkle {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .compose-scroll,
+  .compose-bottom-bar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .field-row {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+
+  .cc-actions,
+  .icon-clear-btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .subject-input {
+    grid-column: 2;
+  }
+
+  .compose-bottom-bar,
+  .bottom-right {
+    flex-wrap: wrap;
+  }
 }
 </style>

@@ -1,72 +1,101 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { Sparkles, Paperclip, Mic, CornerUpRight, FileText, X } from '@lucide/vue'
+import { computed, nextTick, ref } from 'vue'
+import { CornerUpRight, FileText, Mic, Paperclip, Sparkles, Trash2, X } from '@lucide/vue'
+import AiChat from './AiChat.vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
 
 const { selectedEmail } = useMail()
-const {
-  sessions,
-  currentSessionId,
-  messages,
-  isThinking,
-  sendMessage
-} = useAiAssistant()
+const { sessions, currentSessionId, messages, createNewSession, deleteSession, sendMessage } = useAiAssistant()
 
 const inputMessage = ref('')
-const messageContainer = ref<HTMLElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const chatTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const isRecording = ref(false)
+const dictationTimer = ref(0)
+let dictationInterval: ReturnType<typeof setInterval> | null = null
 
-// Attachment State
 interface AttachedFile {
   name: string
   size: string
   type: string
 }
+
 const attachedFiles = ref<AttachedFile[]>([])
 
-// Determine if we are in the "Welcome / Initial State" (no messages sent by user yet)
-const isInitialState = computed(() => {
-  // If the session has only the welcome message, we are in initial state
-  return messages.value.length <= 1
+const isFreshSession = computed(() => {
+  const hasUserMessage = messages.value.some(message => message.sender === 'user')
+  return !hasUserMessage && messages.value.length <= 1
 })
 
-function scrollToBottom() {
+const transitionToChat = ref(false)
+const containerRef = ref<HTMLElement | null>(null)
+const welcomeComposerRef = ref<HTMLElement | null>(null)
+const transitionLeft = ref(0)
+const transitionTop = ref(0)
+const transitionWidth = ref(0)
+const transitionOffsetY = ref(0)
+const transitionArmed = ref(false)
+
+const shouldShowWelcome = computed(() => isFreshSession.value || transitionToChat.value)
+
+const TRANSITION_MS = 520
+const BOTTOM_OFFSET_PX = 22
+
+function beginWelcomeToChatTransition() {
+  if (transitionToChat.value) return
+  const composerEl = welcomeComposerRef.value
+  const containerEl = containerRef.value
+  if (!composerEl || !containerEl) return
+
+  const composerRect = composerEl.getBoundingClientRect()
+  const containerRect = containerEl.getBoundingClientRect()
+
+  transitionLeft.value = composerRect.left
+  transitionTop.value = composerRect.top
+  transitionWidth.value = composerRect.width
+  transitionOffsetY.value = 0
+  transitionArmed.value = false
+
+  transitionToChat.value = true
+
   nextTick(() => {
-    if (messageContainer.value) {
-      messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const endTop = containerRect.top + containerRect.height - composerRect.height - BOTTOM_OFFSET_PX
+        transitionOffsetY.value = endTop - composerRect.top
+        transitionArmed.value = true
+      })
+    })
   })
+
+  window.setTimeout(() => {
+    transitionToChat.value = false
+    transitionArmed.value = false
+  }, TRANSITION_MS)
 }
 
-function handleSend() {
-  if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
+function triggerFileSelect() {
+  fileInputRef.value?.click()
+}
 
-  let formattedText = inputMessage.value.trim()
-
-  if (attachedFiles.value.length > 0) {
-    const fileNames = attachedFiles.value.map(f => `"${f.name}" (${f.size})`).join(', ')
-    const prefix = formattedText ? `${formattedText}\n\n` : ''
-    formattedText = `${prefix}📎 Attached files: ${fileNames}`
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (!target.files) return
+  for (let i = 0; i < target.files.length; i++) {
+    const file = target.files[i]
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+    attachedFiles.value.push({
+      name: file.name,
+      size: `${sizeMB} MB`,
+      type: file.type
+    })
   }
-
-  sendMessage(formattedText, selectedEmail.value)
-  inputMessage.value = ''
-  attachedFiles.value = []
-  scrollToBottom()
-
-  // Reset textarea height
-  nextTick(() => {
-    if (chatTextareaRef.value) {
-      chatTextareaRef.value.style.height = 'auto'
-    }
-  })
+  target.value = ''
 }
 
-function selectSuggestion(suggestion: string) {
-  sendMessage(suggestion, selectedEmail.value)
-  scrollToBottom()
+function removeFile(index: number) {
+  attachedFiles.value.splice(index, 1)
 }
 
 function adjustTextareaHeight() {
@@ -76,519 +105,398 @@ function adjustTextareaHeight() {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
 }
 
-// File Attachment handling
-function triggerFileSelect() {
-  if (fileInputRef.value) {
-    fileInputRef.value.click()
+function startVoiceDictation() {
+  if (isRecording.value) {
+    stopVoiceDictation()
+    return
   }
-}
 
-function handleFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  if (target.files) {
-    for (let i = 0; i < target.files.length; i++) {
-      const file = target.files[i]
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      attachedFiles.value.push({
-        name: file.name,
-        size: `${sizeMB} MB`,
-        type: file.type
-      })
+  isRecording.value = true
+  dictationTimer.value = 0
+
+  dictationInterval = setInterval(() => {
+    dictationTimer.value += 1
+    if (dictationTimer.value >= 30) {
+      stopVoiceDictation()
     }
+  }, 100)
+}
+
+function stopVoiceDictation() {
+  if (dictationInterval) {
+    clearInterval(dictationInterval)
+    dictationInterval = null
   }
-  scrollToBottom()
+
+  isRecording.value = false
+
+  if (selectedEmail.value) {
+    const sender = selectedEmail.value.sender.split(' ')[0]
+    inputMessage.value = `Can you draft a short, formal response to ${sender} accepting the timeline but suggesting we meet on Google Meet instead of B?`
+  } else {
+    inputMessage.value = "Show my highest priority tasks from today's intelligence summary."
+  }
+
+  nextTick(() => adjustTextareaHeight())
 }
 
-function removeFile(index: number) {
-  attachedFiles.value.splice(index, 1)
-}
+function handleStartChat() {
+  if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
 
-function formatMessageText(text: string) {
-  return text
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/```text<br>([\s\S]*?)```/g, '<div class="draft-block"><pre>$1</pre></div>')
-    .replace(/```text([\s\S]*?)```/g, '<div class="draft-block"><pre>$1</pre></div>')
-}
+  // Keep welcome UI mounted briefly and animate composer down.
+  // (isFreshSession will flip to false immediately, so we override via transitionToChat.)
+  beginWelcomeToChatTransition()
 
-onMounted(() => {
-  scrollToBottom()
-})
+  let formattedText = inputMessage.value.trim()
+
+  if (attachedFiles.value.length > 0) {
+    const fileNames = attachedFiles.value.map(file => `"${file.name}" (${file.size})`).join(', ')
+    const prefix = formattedText ? `${formattedText}\n\n` : ''
+    formattedText = `${prefix}📎 Attached files: ${fileNames}`
+  }
+
+  sendMessage(formattedText, selectedEmail.value)
+  inputMessage.value = ''
+  attachedFiles.value = []
+
+  nextTick(() => {
+    if (chatTextareaRef.value) {
+      chatTextareaRef.value.style.height = 'auto'
+    }
+  })
+}
 </script>
 
 <template>
-  <div class="dedicated-chat-page" :class="{ 'initial-layout': isInitialState }">
-    <!-- 1. LANDING WELCOME STATE -->
-    <div v-if="isInitialState" class="welcome-container animate-fade-in">
-      <!-- Monochrome mesh grid background pattern -->
-      <div class="pixelated-background"></div>
-
-      <!-- Welcome Heading -->
-      <div class="welcome-heading-wrapper">
-        <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
-      </div>
-
-      <!-- Centered Double-Box Input -->
-      <div class="centered-composer-wrapper">
-        <!-- Hidden file input -->
-        <input
-          type="file"
-          ref="fileInputRef"
-          multiple
-          @change="handleFileChange"
-          style="display: none"
-        />
-
-        <div class="double-box-outer">
-          <div class="chat-input-card">
-            <!-- File chips -->
-            <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
-              <div v-for="(file, i) in attachedFiles" :key="i" class="attached-chip">
-                <FileText :size="11" class="chip-file-icon" />
-                <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
-                <span class="chip-file-size">{{ file.size }}</span>
-                <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-                  <X :size="10" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Textarea -->
-            <textarea
-              ref="chatTextareaRef"
-              v-model="inputMessage"
-              placeholder="Dump you mind, let me manage"
-              class="chat-textarea"
-              rows="1"
-              @input="adjustTextareaHeight"
-              @keydown.enter.prevent="handleSend"
-            ></textarea>
-
-            <!-- Card footer actions -->
-            <div class="card-toolbar-row">
-              <div class="toolbar-left-actions">
-                <button type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
-                  <Paperclip :size="15" />
-                </button>
-                <button type="button" class="toolbar-icon-btn flex-center" disabled>
-                  <Mic :size="15" />
-                </button>
-              </div>
-              <button
-                type="button"
-                class="card-send-btn flex-center"
-                :disabled="!inputMessage.trim() && attachedFiles.length === 0"
-                @click="handleSend"
-              >
-                <CornerUpRight :size="14" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+  <section ref="containerRef" class="pane pane-right bubbles-ai-page">
+    <div v-if="shouldShowWelcome" class="bubbles-ai-backdrop" aria-hidden="true">
+      <div class="dither-layer" />
+      <div class="dither-vignette" />
     </div>
 
-    <!-- 2. ACTIVE CHAT STREAM STATE -->
-    <div v-else class="active-chat-container">
-      <div class="active-chat-header flex-between">
-        <h3 class="pane-title flex-center gap-6">
-          <Sparkles class="header-spark-icon" :size="14" />
-          <span>Assistant Session</span>
-        </h3>
-      </div>
+    <div class="bubbles-ai-shell animate-fade-in">
+      <div class="pane-header ai-session-header">
+        <div class="ai-header-left">
+          <Sparkles :size="15" class="header-icon" />
 
-      <!-- Messages Viewport -->
-      <div class="chat-messages" ref="messageContainer">
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          class="message-wrapper"
-          :class="msg.sender"
-        >
-          <!-- AI response -->
-          <div v-if="msg.sender === 'ai'" class="ai-response animate-fade-in">
-            <div class="ai-msg-header">
-              <span class="ai-icon flex-center"><Sparkles :size="12" /></span>
-            </div>
-            <div class="ai-msg-body" v-html="formatMessageText(msg.text)"></div>
+          <div class="session-selector-wrapper">
+            <select v-model="currentSessionId" class="minimal-select" title="Switch chat session">
+              <option v-for="sess in sessions" :key="sess.id" :value="sess.id">
+                {{ sess.title }}
+              </option>
+            </select>
           </div>
 
-          <!-- User message -->
-          <div v-else class="user-msg animate-fade-in">
-            <div class="user-msg-text" v-html="formatMessageText(msg.text)"></div>
-          </div>
-        </div>
-
-        <!-- Thinking indicator -->
-        <div v-if="isThinking" class="message-wrapper ai">
-          <div class="ai-response thinking">
-            <div class="ai-msg-header">
-              <span class="ai-icon flex-center pulse"><Sparkles :size="12" /></span>
-            </div>
-            <div class="typing-dots flex-center">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- suggestion chips sitting at bottom -->
-      <div class="suggestions-bar" v-if="!isThinking">
-        <div class="suggestions-scroll">
           <button
-            v-for="chip in ['How does today look?', 'Show my highest priority tasks', 'Summarize this week\'s budget discussion']"
-            :key="chip"
-            class="suggestion-chip"
-            @click="selectSuggestion(chip)"
+            type="button"
+            class="minimal-new-chat-btn flex-center"
+            title="New chat session"
+            @click="createNewSession"
           >
-            {{ chip }}
+            +
+          </button>
+
+          <button
+            v-if="sessions.length > 1"
+            type="button"
+            class="minimal-trash-btn flex-center"
+            title="Delete this chat session"
+            @click="deleteSession(currentSessionId)"
+          >
+            <Trash2 :size="12" />
           </button>
         </div>
       </div>
 
-      <!-- Bottom Composer docked -->
-      <div class="chat-input-area">
-        <input
-          type="file"
-          ref="fileInputRef"
-          multiple
-          @change="handleFileChange"
-          style="display: none"
-        />
+      <div class="ai-chat-wrapper">
+        <div v-if="shouldShowWelcome" class="welcome-stage animate-fade-in">
+          <div class="welcome-copy">
+            <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
+          </div>
 
-        <div class="double-box-outer">
-          <div class="chat-input-card">
-            <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
-              <div v-for="(file, i) in attachedFiles" :key="i" class="attached-chip">
-                <FileText :size="11" class="chip-file-icon" />
-                <span class="chip-file-name">{{ file.name }}</span>
-                <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
-                  <X :size="10" />
-                </button>
+          <div
+            ref="welcomeComposerRef"
+            class="welcome-composer"
+            :class="{ 'is-transitioning': transitionToChat, 'is-armed': transitionArmed }"
+            :style="transitionToChat
+              ? { left: `${transitionLeft}px`, top: `${transitionTop}px`, width: `${transitionWidth}px`, transform: `translateY(${transitionArmed ? transitionOffsetY : 0}px)` }
+              : {}"
+          >
+            <input
+              ref="fileInputRef"
+              type="file"
+              multiple
+              style="display: none"
+              @change="handleFileChange"
+            >
+
+            <div class="double-box-outer" :class="{ 'is-recording': isRecording }">
+              <div class="chat-input-card">
+                <div v-if="attachedFiles.length > 0" class="attachment-chips-row animate-fade-in">
+                  <div v-for="(file, i) in attachedFiles" :key="`${file.name}_${i}`" class="attached-chip">
+                    <FileText :size="11" class="chip-file-icon" />
+                    <span class="chip-file-name" :title="file.name">{{ file.name }}</span>
+                    <span class="chip-file-size">{{ file.size }}</span>
+                    <button type="button" class="remove-chip-btn flex-center" @click="removeFile(i)">
+                      <X :size="10" />
+                    </button>
+                  </div>
+                </div>
+
+                <textarea
+                  v-if="!isRecording"
+                  ref="chatTextareaRef"
+                  v-model="inputMessage"
+                  placeholder="Dump your mind, let me manage"
+                  class="chat-textarea"
+                  rows="1"
+                  @input="adjustTextareaHeight"
+                  @keydown.enter.prevent="handleStartChat"
+                />
+
+                <div v-else class="dictating-pulse-row animate-fade-in">
+                  <span class="recording-pulsing-dot"></span>
+                  <span class="dictating-status-text">Listening... Speak now</span>
+                  <div class="mini-voice-wave flex-center">
+                    <span class="wave-pillar p1"></span>
+                    <span class="wave-pillar p2"></span>
+                    <span class="wave-pillar p3"></span>
+                    <span class="wave-pillar p4"></span>
+                  </div>
+                  <button type="button" class="stop-dictate-btn" @click="stopVoiceDictation">Stop</button>
+                </div>
+
+                <div class="card-toolbar-row">
+                  <div class="toolbar-left-actions">
+                    <button type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
+                      <Paperclip :size="15" />
+                    </button>
+                    <button
+                      type="button"
+                      class="toolbar-icon-btn flex-center"
+                      :class="{ 'recording-active': isRecording }"
+                      title="Voice dictation"
+                      @click="startVoiceDictation"
+                    >
+                      <Mic :size="15" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="card-send-btn flex-center"
+                    :disabled="(!inputMessage.trim() && attachedFiles.length === 0) || isRecording"
+                    @click="handleStartChat"
+                  >
+                    <CornerUpRight :size="14" />
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <textarea
-              ref="chatTextareaRef"
-              v-model="inputMessage"
-              placeholder="Dump you mind, let me manage"
-              class="chat-textarea"
-              rows="1"
-              @input="adjustTextareaHeight"
-              @keydown.enter.prevent="handleSend"
-            ></textarea>
-
-            <div class="card-toolbar-row">
-              <div class="toolbar-left-actions">
-                <button type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
-                  <Paperclip :size="15" />
-                </button>
-                <button type="button" class="toolbar-icon-btn flex-center" disabled>
-                  <Mic :size="15" />
-                </button>
-              </div>
-              <button
-                type="button"
-                class="card-send-btn flex-center"
-                :disabled="!inputMessage.trim() && attachedFiles.length === 0"
-                @click="handleSend"
-              >
-                <CornerUpRight :size="14" />
-              </button>
             </div>
           </div>
         </div>
+
+        <AiChat v-if="!shouldShowWelcome" />
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.dedicated-chat-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  background-color: var(--bg-primary);
+.bubbles-ai-page {
+  position: relative;
   overflow: hidden;
 }
 
-.dedicated-chat-page.initial-layout {
-  justify-content: center;
-  align-items: center;
+.bubbles-ai-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--bg-primary);
 }
 
-/* Welcome Slate Centered Styles */
-.welcome-container {
+.dither-layer {
+  position: absolute;
+  inset: -4%;
+  background-image: url('/dither-welcome.jpg');
+  background-size: cover;
+  background-position: center ;
+  background-repeat: no-repeat;
+
+  filter: grayscale(1) contrast(1.3);
+}
+
+.dither-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.72) 45%,
+      rgba(255, 255, 255, 0.78) 100%
+    ),
+    radial-gradient(
+      ellipse 90% 75% at 50% 40%,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.82) 100%
+    );
+}
+
+.bubbles-ai-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.ai-session-header {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-selector-wrapper {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.minimal-select {
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  padding: 0 4px 0 0;
+  max-width: min(320px, 42vw);
+  text-overflow: ellipsis;
+}
+
+.minimal-new-chat-btn {
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.minimal-new-chat-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.minimal-trash-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.minimal-trash-btn:hover {
+  border-color: hsl(0, 100%, 92%);
+  color: hsl(0, 85%, 45%);
+  background-color: hsl(0, 100%, 99%);
+}
+
+.ai-chat-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-stage {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100%;
-  width: 100%;
-  position: relative;
-  padding: 40px;
-  background-color: var(--bg-primary);
+  gap: 20px;
+  padding: 24px;
 }
 
-/* Pixelated mesh pattern background exactly resembling screenshot backdrop */
-.pixelated-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.85;
-  background-image: url('/deter-bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  z-index: 1;
-}
-
-.welcome-heading-wrapper {
-  margin-bottom: 28px;
+.welcome-copy {
   text-align: center;
-  z-index: 2;
 }
 
 .welcome-title {
-  font-family: var(--font-title);
-  font-size: 2.2rem;
+  font-family: var(--font-sans);
+  font-size: 2.75rem;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .underlined-brand {
-  position: relative;
-  display: inline-block;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
-.underlined-brand::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -2px;
+.welcome-composer {
   width: 100%;
-  height: 1.5px;
-  background-color: var(--text-primary);
-}
-
-.centered-composer-wrapper {
   max-width: 580px;
-  width: 100%;
-  z-index: 2;
 }
 
-/* Active message feed layout styles */
-.active-chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+.welcome-composer.is-transitioning {
+  position: fixed;
+  z-index: 60;
+  left: 0;
+  top: 0;
+  will-change: transform, opacity;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
 }
 
-.active-chat-header {
-  height: 56px;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
+.welcome-composer.is-transitioning.is-armed {
+  opacity: 0.98;
 }
 
-.gap-6 {
-  gap: 6px;
-}
-
-.header-spark-icon {
-  color: var(--text-secondary);
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-.message-wrapper {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.user-msg {
-  max-width: 80%;
-  align-self: flex-end;
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  border-bottom-right-radius: 3px;
-  padding: 10px 14px;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  margin-left: auto;
-  word-break: break-word;
-  box-shadow: var(--shadow-sm);
-}
-
-.ai-response {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ai-msg-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ai-icon {
-  width: 18px;
-  height: 18px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.ai-msg-body {
-  font-size: 0.84rem;
-  color: var(--text-primary);
-  line-height: 1.6;
-  padding-left: 24px;
-}
-
-/* Draft blocks */
-:deep(.draft-block) {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin: 10px 0 4px;
-  overflow-x: auto;
-}
-
-:deep(.draft-block pre) {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.76rem;
-  color: var(--text-primary);
-  line-height: 1.45;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-/* Typing dots */
-.typing-dots {
-  display: flex;
-  gap: 4px;
-  height: 12px;
-  padding-left: 24px;
-}
-
-.typing-dots span {
-  width: 4px;
-  height: 4px;
-  background-color: var(--text-muted);
-  border-radius: 50%;
-  animation: typingDot 1.4s infinite ease-in-out;
-}
-
-.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes typingDot {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-  40% { transform: scale(1.1); opacity: 1; }
-}
-
-.pulse {
-  animation: pulseLogo 2s infinite ease-in-out;
-}
-
-@keyframes pulseLogo {
-  0% { transform: scale(1); opacity: 0.7; }
-  50% { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.7; }
-}
-
-/* Suggestions */
-.suggestions-bar {
-  padding: 4px 16px 8px;
-  overflow-x: auto;
-  flex-shrink: 0;
-  scrollbar-width: none;
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-.suggestions-bar::-webkit-scrollbar {
-  display: none;
-}
-
-.suggestions-scroll {
-  display: flex;
-  gap: 8px;
-}
-
-.suggestion-chip {
-  flex-shrink: 0;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
-  padding: 5px 12px;
-  border-radius: 9999px;
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  font-weight: 450;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  outline: none;
-}
-
-.suggestion-chip:hover {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-
-/* Docked Input */
-.chat-input-area {
-  padding: 10px 20px 20px;
-  flex-shrink: 0;
-  background-color: var(--bg-primary);
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-/* Double Box Layout exactly resembling screenshot */
 .double-box-outer {
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 5px;
   width: 100%;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.05);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .double-box-outer:focus-within {
   border-color: var(--text-primary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.double-box-outer.is-recording {
+  background-color: hsl(0, 100%, 97%);
+  border-color: hsl(0, 80%, 90%);
 }
 
 .chat-input-card {
@@ -599,8 +507,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: var(--shadow-sm);
-  transition: background-color var(--transition-fast);
 }
 
 .chat-textarea {
@@ -621,7 +527,6 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-/* File Chips */
 .attachment-chips-row {
   display: flex;
   flex-wrap: wrap;
@@ -705,6 +610,11 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
+.toolbar-icon-btn.recording-active {
+  background-color: hsl(0, 85%, 95%);
+  color: hsl(0, 85%, 45%);
+}
+
 .card-send-btn {
   width: 32px;
   height: 28px;
@@ -716,13 +626,8 @@ onMounted(() => {
   transition: all var(--transition-fast);
 }
 
-.double-box-outer:focus-within .card-send-btn {
-  background-color: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-primary);
-}
-
-.card-send-btn:hover:not(:disabled) {
+.card-send-btn:hover:not(:disabled),
+.chat-input-card:focus-within .card-send-btn {
   background-color: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-primary);
@@ -736,12 +641,116 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.dictating-pulse-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 24px;
+}
+
+.recording-pulsing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: hsl(0, 85%, 50%);
+  animation: voicePulse 1.2s infinite ease-in-out;
+}
+
+.dictating-status-text {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.mini-voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 14px;
+}
+
+.wave-pillar {
+  width: 2px;
+  background-color: var(--text-primary);
+  border-radius: 1px;
+  animation: moveWave 1s infinite alternate ease-in-out;
+}
+
+.p1 { height: 6px; animation-delay: 0.1s; }
+.p2 { height: 12px; animation-delay: 0.3s; }
+.p3 { height: 8px; animation-delay: 0.2s; }
+.p4 { height: 10px; animation-delay: 0.4s; }
+
+.stop-dictate-btn {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.stop-dictate-btn:hover {
+  background-color: var(--border-color);
+}
+
+/* Let chat panels sit on frosted white over dither */
+.ai-chat-wrapper :deep(.ai-chat) {
+  background: transparent;
+}
+
+.ai-chat-wrapper :deep(.chat-messages) {
+  max-width: 720px;
+}
+
+.ai-chat-wrapper :deep(.suggestions-bar),
+.ai-chat-wrapper :deep(.chat-input-area) {
+  max-width: 720px;
+  background: transparent;
+}
+
+.ai-chat-wrapper :deep(.chat-input-area) {
+  padding-bottom: 24px;
+}
+
+.ai-chat-wrapper :deep(.ai-chat) {
+  animation: chatSettleIn 280ms ease both;
+}
+
+.ai-chat-wrapper :deep(.chat-input-area) {
+  animation: composerSettleIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .animate-fade-in {
   animation: fadeIn 0.25s ease;
 }
 
 @keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes chatSettleIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes composerSettleIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes voicePulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.5; }
+}
+
+@keyframes moveWave {
+  from { transform: scaleY(0.6); }
+  to { transform: scaleY(1.3); }
 }
 </style>
