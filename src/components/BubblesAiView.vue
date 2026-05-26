@@ -29,6 +29,7 @@ const isFreshSession = computed(() => {
 })
 
 const transitionToChat = ref(false)
+const justTransitioned = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const welcomeComposerRef = ref<HTMLElement | null>(null)
 const transitionLeft = ref(0)
@@ -40,7 +41,7 @@ const transitionArmed = ref(false)
 const shouldShowWelcome = computed(() => isFreshSession.value || transitionToChat.value)
 
 const TRANSITION_MS = 520
-const BOTTOM_OFFSET_PX = 22
+const BOTTOM_OFFSET_PX = 24
 
 function beginWelcomeToChatTransition() {
   if (transitionToChat.value) return
@@ -72,6 +73,10 @@ function beginWelcomeToChatTransition() {
   window.setTimeout(() => {
     transitionToChat.value = false
     transitionArmed.value = false
+    justTransitioned.value = true
+    window.setTimeout(() => {
+      justTransitioned.value = false
+    }, 1000)
   }, TRANSITION_MS)
 }
 
@@ -156,14 +161,24 @@ function handleStartChat() {
   }
 
   sendMessage(formattedText, selectedEmail.value)
-  inputMessage.value = ''
-  attachedFiles.value = []
 
-  nextTick(() => {
-    if (chatTextareaRef.value) {
-      chatTextareaRef.value.style.height = 'auto'
-    }
-  })
+  if (transitionToChat.value) {
+    window.setTimeout(() => {
+      inputMessage.value = ''
+      attachedFiles.value = []
+      if (chatTextareaRef.value) {
+        chatTextareaRef.value.style.height = 'auto'
+      }
+    }, TRANSITION_MS)
+  } else {
+    inputMessage.value = ''
+    attachedFiles.value = []
+    nextTick(() => {
+      if (chatTextareaRef.value) {
+        chatTextareaRef.value.style.height = 'auto'
+      }
+    })
+  }
 }
 </script>
 
@@ -208,7 +223,7 @@ function handleStartChat() {
         </div>
       </div>
 
-      <div class="ai-chat-wrapper">
+      <div class="ai-chat-wrapper" :class="{ 'just-transitioned': justTransitioned }">
         <div v-if="shouldShowWelcome" class="welcome-stage animate-fade-in">
           <div class="welcome-copy">
             <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
@@ -472,6 +487,7 @@ function handleStartChat() {
   z-index: 60;
   left: 0;
   top: 0;
+  pointer-events: none;
   will-change: transform, opacity;
   transform: translateY(0);
   transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
@@ -722,7 +738,7 @@ function handleStartChat() {
   animation: chatSettleIn 280ms ease both;
 }
 
-.ai-chat-wrapper :deep(.chat-input-area) {
+.ai-chat-wrapper:not(.just-transitioned) :deep(.chat-input-area) {
   animation: composerSettleIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
