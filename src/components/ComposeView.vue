@@ -892,6 +892,9 @@ button:disabled {
   z-index: 20;
   width: min(320px, calc(100vw - 48px));
   max-width: calc(100vw - 48px);
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -901,6 +904,7 @@ button:disabled {
 
 .draft-item {
   width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -910,6 +914,7 @@ button:disabled {
   padding: 10px;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .draft-item:hover {

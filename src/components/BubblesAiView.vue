@@ -473,11 +473,13 @@ function handleStartChat() {
   left: 0;
   top: 0;
   will-change: transform, opacity;
-  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+  transform: translateY(0);
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
 }
 
 .welcome-composer.is-transitioning.is-armed {
-  opacity: 0.98;
+  opacity: 0.92;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
 }
 
 .double-box-outer {
