@@ -224,6 +224,13 @@ export const useMailStore = defineStore('mail', () => {
     selectedEmailId.value = firstFiltered ? firstFiltered.id : null
   }
 
+  const sendEmailReply = async (payload: { accountId: string; to: string[]; subject: string; bodyText: string; inReplyTo?: string }) => {
+    await appApiFetch('/api/gmail/send', {
+      method: 'POST',
+      body: payload
+    })
+  }
+
   const deleteEmail = (id: string) => {
     const email = emails.value.find(e => e.id === id)
     if (email) void applyGmailAction(email, 'trash')
@@ -661,6 +668,7 @@ export const useMailStore = defineStore('mail', () => {
     gmailHasMore, gmailPageLoading,
     setSelectedEmailId, setSearchQuery, setActiveCategory, setActiveTab,
     setViewMode, setActiveAccount, deleteEmail, archiveEmail, markUnread,
+    sendEmailReply,
     refreshGmailAccounts, connectGmailAccount, syncActiveGmailAccount, loadGmailMessages,
     loadMoreGmailMessages
   }
@@ -691,6 +699,7 @@ export function useMail() {
     setViewMode: store.setViewMode,
     setActiveAccount: store.setActiveAccount,
     deleteEmail: store.deleteEmail,
+    sendEmailReply: store.sendEmailReply,
     archiveEmail: store.archiveEmail,
     markUnread: store.markUnread,
     refreshGmailAccounts: store.refreshGmailAccounts,

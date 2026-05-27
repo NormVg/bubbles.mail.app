@@ -971,9 +971,6 @@ button:disabled {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-}
-
-.fmt-btn {
   border-color: transparent;
   background: transparent;
 }
@@ -1319,7 +1316,7 @@ button:disabled {
 .voice-wave span:nth-child(4) { height: 20px; animation-delay: 0.24s; }
 
 .compose-bottom-bar {
-  min-height: 48px;
+  height: 49px;
   display: flex;
   align-items: center;
   justify-content: space-between;

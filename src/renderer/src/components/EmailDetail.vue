@@ -10,7 +10,7 @@ import AiDraftPanel from './common/AiDraftPanel.vue'
 import { useDictation } from '../composables/useDictation'
 import { useSettings } from '../composables/useSettings'
 
-const { selectedEmail } = useMail()
+const { selectedEmail, sendEmailReply } = useMail()
 const { settings } = useSettings()
 
 const manuallyGeneratedSummary = ref(false)
@@ -209,12 +209,28 @@ function generateDraft() {
 // Actions in drafted review state
 const showSuccessOverlay = ref(false)
 
-function sendFinalEmail() {
-  showSuccessOverlay.value = true
-  setTimeout(() => {
-    showSuccessOverlay.value = false
-    discardDraft()
-  }, 2200)
+async function sendFinalEmail() {
+  if (!selectedEmail.value || !selectedEmail.value.gmailAccountId) return
+  
+  try {
+    const payload = {
+      accountId: selectedEmail.value.gmailAccountId,
+      to: [selectedEmail.value.senderEmail],
+      subject: selectedEmail.value.subject.startsWith('Re:') ? selectedEmail.value.subject : `Re: ${selectedEmail.value.subject}`,
+      bodyText: generatedDraft.value,
+      inReplyTo: selectedEmail.value.gmailMessageId
+    }
+    
+    await sendEmailReply(payload)
+    
+    showSuccessOverlay.value = true
+    setTimeout(() => {
+      showSuccessOverlay.value = false
+      discardDraft()
+    }, 2200)
+  } catch (error) {
+    console.error('Failed to send email:', error)
+  }
 }
 
 function discardDraft() {

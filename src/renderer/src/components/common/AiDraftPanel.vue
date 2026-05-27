@@ -295,6 +295,7 @@ watch(() => props.aiDraftState, () => {
   margin: 0;
   line-height: 1.4;
   text-align: center;
+  text-wrap: balance;
 }
 
 .draft-review-card {

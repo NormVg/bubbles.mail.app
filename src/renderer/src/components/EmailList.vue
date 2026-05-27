@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { AlertCircle, Plus, RefreshCw, Search } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
+import { useDailyDigest } from '../composables/useDailyDigest'
 
 const {
   filteredEmails,
@@ -16,6 +18,27 @@ const {
   syncActiveGmailAccount,
   loadMoreGmailMessages
 } = useMail()
+
+const { selectedDateKey } = useDailyDigest()
+
+// Auto-fetch emails if a date is selected but no emails are loaded yet
+watch(
+  () => selectedDateKey.value,
+  async (newDateKey) => {
+    if (newDateKey && filteredEmails.value.length === 0 && gmailHasMore.value) {
+      // Loop until we find emails for this date or run out of history
+      while (
+        selectedDateKey.value === newDateKey && 
+        filteredEmails.value.length === 0 && 
+        gmailHasMore.value &&
+        !gmailPageLoading.value
+      ) {
+        await loadMoreGmailMessages()
+      }
+    }
+  },
+  { immediate: true }
+)
 
 function loadMore() {
   void loadMoreGmailMessages()
@@ -104,7 +127,7 @@ function selectEmail(id: string) {
       <span>Loading more...</span>
     </div>
     <div v-else-if="gmailHasMore && filteredEmails.length > 0" class="load-more-wrapper flex-center animate-fade-in">
-      <button class="load-more-btn flex-center" @click="loadMore">
+      <button class="load-more-btn flex-center" :disabled="gmailPageLoading" @click="loadMore">
         Load more emails
       </button>
     </div>
@@ -117,6 +140,12 @@ function selectEmail(id: string) {
 <style scoped>
 .email-list {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.email-list-group {
   display: flex;
   flex-direction: column;
   gap: 12px;

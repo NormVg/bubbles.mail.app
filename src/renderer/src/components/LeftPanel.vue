@@ -517,7 +517,10 @@ onUnmounted(() => {
 
 /* Fixed Footer Row */
 .sidebar-footer {
-  padding: 10px 14px;
+  height: 49px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
   border-top: 1px solid var(--border-color);
   background-color: var(--bg-primary);
   flex-shrink: 0;
