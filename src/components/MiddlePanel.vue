@@ -5,7 +5,7 @@ import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 
 const { viewMode, setViewMode, searchQuery, setSearchQuery } = useMail()
-const { selectedReport, selectedDateKey, setSelectedDateKey } = useDailyDigest()
+const { selectedDateKey, setSelectedDateKey } = useDailyDigest()
 
 function handleSearchInput(event: Event) {
   const target = event.target as HTMLInputElement

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSettings, PersonalityTone } from '../composables/useSettings'
-import { Check, Sparkles, AlertCircle, RefreshCw, Key, Eye, EyeOff } from '@lucide/vue'
+import { Check, AlertCircle, RefreshCw, Key, Eye, EyeOff } from '@lucide/vue'
 
 const props = defineProps({
   category: {

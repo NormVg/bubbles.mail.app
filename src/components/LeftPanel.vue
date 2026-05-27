@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 import {
@@ -25,13 +24,6 @@ const {
 } = useMail()
 
 const { selectedDateKey, setSelectedDateKey: setDateKey } = useDailyDigest()
-
-const isDarkTheme = ref(false)
-
-function toggleTheme() {
-  isDarkTheme.value = !isDarkTheme.value
-  document.documentElement.classList.toggle('dark-theme', isDarkTheme.value)
-}
 
 function setSelectedDateKey(date: string) {
   setDateKey(date)

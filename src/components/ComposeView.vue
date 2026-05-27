@@ -1,176 +1,56 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import type { Ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import {
-  Bold,
   Check,
   ChevronDown,
-  
   FileText,
-  Italic,
-  Link,
-  List,
-  ListOrdered,
-  
-  
   Paperclip,
-  RefreshCw,
   Send,
   Sparkles,
   SquarePen,
   Trash2,
-  UnderlineIcon,
-  Wand2,
   X
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
-import AiInputBox from './common/AiInputBox.vue'
+import { storeToRefs } from 'pinia'
+import { useComposeStore, type SavedDraft, type AttachedFile } from '../stores/useComposeStore'
+import AiDraftPanel from './common/AiDraftPanel.vue'
+import ComposeFields from './compose/ComposeFields.vue'
+import ComposeToolbar from './compose/ComposeToolbar.vue'
 
-const { activeAccount, setViewMode } = useMail()
+const { setViewMode } = useMail()
+const composeStore = useComposeStore()
 
-interface Chip {
-  id: string
-  email: string
-  valid: boolean
-}
+const {
+  showDraftsDropdown,
+  showAiPanel,
+  subject,
+  body,
+  attachments,
+  sent,
+  draftSaved,
+  aiDraftState,
+  aiPrompt,
+  aiDraft,
+  aiAttachedFiles,
+  aiShowApplied,
+  savedDrafts,
+  canSend,
+  toChips,
+  ccChips,
+  bccChips,
+  showCc,
+  showBcc,
+  visibleFromAccount
+} = storeToRefs(composeStore)
 
-interface SavedDraft {
-  id: string
-  subject: string
-  body: string
-  toChips: Chip[]
-  ccChips: Chip[]
-  bccChips: Chip[]
-  time: string
-}
-
-interface AttachedFile {
-  name: string
-  size: string
-  type: string
-}
-
-type DraftState = 'empty' | 'dictating' | 'generating' | 'drafted'
-
-const fromAccounts = [
-  'thenormvg@gmail.com',
-  'vishnuarunkmgupta@gmail.com',
-  'thealphaones.hq@gmail.com'
-]
-
-const fromAccount = ref(activeAccount.value)
-const showFromDropdown = ref(false)
-const showDraftsDropdown = ref(false)
-const showCc = ref(false)
-const showBcc = ref(false)
-const showAiPanel = ref(true)
-
-const toChips = ref<Chip[]>([])
-const ccChips = ref<Chip[]>([])
-const bccChips = ref<Chip[]>([])
-const toInput = ref('')
-const ccInput = ref('')
-const bccInput = ref('')
-
-const toInputRef = ref<HTMLInputElement | null>(null)
-const ccInputRef = ref<HTMLInputElement | null>(null)
-const bccInputRef = ref<HTMLInputElement | null>(null)
 const bodyTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const aiPromptRef = ref<HTMLTextAreaElement | null>(null)
 const aiDraftRef = ref<HTMLTextAreaElement | null>(null)
 
-const subject = ref('')
-const body = ref('')
-const attachments = ref<AttachedFile[]>([])
-const sent = ref(false)
-const draftSaved = ref(false)
-
-const aiDraftState = ref<DraftState>('empty')
-const aiPrompt = ref('')
-const aiDraft = ref('')
-const aiAttachedFiles = ref<AttachedFile[]>([])
-const aiShowApplied = ref(false)
-
-const savedDrafts = ref<SavedDraft[]>([
-  {
-    id: 'd1',
-    subject: 'Follow Up: Q2 Sprint Review Pipeline',
-    body: 'Hi William,\n\nI wanted to check on the Q2 desktop app compilation latency. We should confirm the database cache indices before testing tomorrow.\n\nBest,\nAlicia',
-    toChips: [{ id: 'draft_1', email: 'william.smith@example.com', valid: true }],
-    ccChips: [],
-    bccChips: [],
-    time: '2 hours ago'
-  },
-  {
-    id: 'd2',
-    subject: 'Tauri Platform Release Notes',
-    body: 'Team,\n\nHere are the raw updates on the Tauri cross-platform security configurations for local SQLite databases. All pipelines have passed client tests.\n\nThanks,\nAlicia',
-    toChips: [{ id: 'draft_2', email: 'engineering-list@bubbles.ai', valid: true }],
-    ccChips: [],
-    bccChips: [],
-    time: 'Yesterday'
-  }
-])
-
-const canSend = computed(() => {
-  const recipients = toChips.value.some(chip => chip.valid)
-  return recipients && (subject.value.trim().length > 0 || body.value.trim().length > 0)
-})
-
-const visibleFromAccount = computed(() => fromAccount.value || activeAccount.value)
-
 function goBack() {
   setViewMode('inbox')
-}
-
-function selectFromAccount(account: string) {
-  fromAccount.value = account
-  showFromDropdown.value = false
-}
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-}
-
-function chipId() {
-  return `chip_${Date.now()}_${Math.random().toString(36).slice(2)}`
-}
-
-function addChip(chips: Ref<Chip[]>, input: Ref<string>, inputRef?: Ref<HTMLInputElement | null>) {
-  const values = input.value
-    .split(/[,\n;]/)
-    .map(value => value.trim())
-    .filter(Boolean)
-
-  if (!values.length) return
-
-  const existing = new Set(chips.value.map(chip => chip.email.toLowerCase()))
-  for (const email of values) {
-    if (!existing.has(email.toLowerCase())) {
-      chips.value.push({ id: chipId(), email, valid: isValidEmail(email) })
-      existing.add(email.toLowerCase())
-    }
-  }
-
-  input.value = ''
-  nextTick(() => inputRef?.value?.focus())
-}
-
-function removeChip(chips: Ref<Chip[]>, id: string) {
-  chips.value = chips.value.filter(chip => chip.id !== id)
-}
-
-function handleChipKeydown(event: KeyboardEvent, chips: Ref<Chip[]>, input: Ref<string>, inputRef: Ref<HTMLInputElement | null>) {
-  if (event.key === 'Enter' || event.key === ',' || event.key === 'Tab') {
-    event.preventDefault()
-    addChip(chips, input, inputRef)
-    return
-  }
-
-  if (event.key === 'Backspace' && !input.value && chips.value.length) {
-    chips.value.pop()
-  }
 }
 
 function formatFile(file: File): AttachedFile {
@@ -198,16 +78,6 @@ function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
 }
 
-
-function handleAiFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  const files = input.files
-  if (!files) return
-  aiAttachedFiles.value.push(...Array.from(files).map(formatFile))
-  input.value = ''
-}
-
-
 function autosizeTextarea(textarea: HTMLTextAreaElement | null, maxHeight = 420) {
   if (!textarea) return
   textarea.style.height = 'auto'
@@ -217,11 +87,6 @@ function autosizeTextarea(textarea: HTMLTextAreaElement | null, maxHeight = 420)
 
 function onBodyInput() {
   nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
-}
-
-
-function onAiDraftInput() {
-  nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
 }
 
 function wrapSelection(prefix: string, suffix = '') {
@@ -444,151 +309,13 @@ function handleSend() {
 
     <div class="compose-scroll">
       <div class="compose-sheet">
-        <div class="field-row from-row">
-          <span class="field-label">From</span>
-          <div class="from-account-menu">
-            <button type="button" class="from-account" @click="showFromDropdown = !showFromDropdown">
-              <span class="account-dot">{{ visibleFromAccount.slice(0, 1).toUpperCase() }}</span>
-              <span>{{ visibleFromAccount }}</span>
-              <ChevronDown :size="13" class="from-chevron" />
-            </button>
+                <ComposeFields />
 
-            <Transition name="dropdown">
-              <div v-if="showFromDropdown" class="from-dropdown">
-                <button
-                  v-for="account in fromAccounts"
-                  :key="account"
-                  type="button"
-                  class="from-option"
-                  :class="{ selected: account === visibleFromAccount }"
-                  @click="selectFromAccount(account)"
-                >
-                  <span class="account-dot option-dot">{{ account.slice(0, 1).toUpperCase() }}</span>
-                  <span class="from-option-copy">
-                    <span class="from-option-name">{{ account.split('@')[0] }}</span>
-                    <span class="from-option-email">{{ account }}</span>
-                  </span>
-                  <Check v-if="account === visibleFromAccount" :size="14" class="from-option-check" />
-                </button>
-              </div>
-            </Transition>
-          </div>
-        </div>
-
-        <div class="field-divider" />
-
-        <div class="field-row chip-row">
-          <span class="field-label">To</span>
-          <div class="chips-input" @click="toInputRef?.focus()">
-            <span v-for="chip in toChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
-              {{ chip.email }}
-              <button type="button" class="chip-remove" @click.stop="removeChip(toChips, chip.id)">
-                <X :size="10" />
-              </button>
-            </span>
-            <input
-              ref="toInputRef"
-              v-model="toInput"
-              type="text"
-              class="chip-text-input"
-              placeholder="Add recipient..."
-              @keydown="handleChipKeydown($event, toChips, toInput, toInputRef)"
-              @blur="addChip(toChips, toInput, toInputRef)"
-            >
-          </div>
-          <div class="cc-actions">
-            <button v-if="!showCc" type="button" class="mini-field-btn" @click="showCc = true">Cc</button>
-            <button v-if="!showBcc" type="button" class="mini-field-btn" @click="showBcc = true">Bcc</button>
-          </div>
-        </div>
-
-        <Transition name="field-slide">
-          <div v-if="showCc" class="optional-field">
-            <div class="field-divider" />
-            <div class="field-row chip-row">
-              <span class="field-label">Cc</span>
-              <div class="chips-input" @click="ccInputRef?.focus()">
-                <span v-for="chip in ccChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
-                  {{ chip.email }}
-                  <button type="button" class="chip-remove" @click.stop="removeChip(ccChips, chip.id)">
-                    <X :size="10" />
-                  </button>
-                </span>
-                <input
-                  ref="ccInputRef"
-                  v-model="ccInput"
-                  type="text"
-                  class="chip-text-input"
-                  placeholder="Add CC..."
-                  @keydown="handleChipKeydown($event, ccChips, ccInput, ccInputRef)"
-                  @blur="addChip(ccChips, ccInput, ccInputRef)"
-                >
-              </div>
-              <button type="button" class="icon-clear-btn" @click="showCc = false; ccChips = []">
-                <X :size="13" />
-              </button>
-            </div>
-          </div>
-        </Transition>
-
-        <Transition name="field-slide">
-          <div v-if="showBcc" class="optional-field">
-            <div class="field-divider" />
-            <div class="field-row chip-row">
-              <span class="field-label">Bcc</span>
-              <div class="chips-input" @click="bccInputRef?.focus()">
-                <span v-for="chip in bccChips" :key="chip.id" class="chip" :class="{ invalid: !chip.valid }">
-                  {{ chip.email }}
-                  <button type="button" class="chip-remove" @click.stop="removeChip(bccChips, chip.id)">
-                    <X :size="10" />
-                  </button>
-                </span>
-                <input
-                  ref="bccInputRef"
-                  v-model="bccInput"
-                  type="text"
-                  class="chip-text-input"
-                  placeholder="Add BCC..."
-                  @keydown="handleChipKeydown($event, bccChips, bccInput, bccInputRef)"
-                  @blur="addChip(bccChips, bccInput, bccInputRef)"
-                >
-              </div>
-              <button type="button" class="icon-clear-btn" @click="showBcc = false; bccChips = []">
-                <X :size="13" />
-              </button>
-            </div>
-          </div>
-        </Transition>
-
-        <div class="field-divider" />
-
-        <div class="field-row">
-          <span class="field-label">Subject</span>
-          <input v-model="subject" class="subject-input" type="text" placeholder="Subject">
-        </div>
-
-        <div class="format-toolbar">
-          <button type="button" class="fmt-btn" title="Bold" @click="wrapSelection('**', '**')">
-            <Bold :size="14" />
-          </button>
-          <button type="button" class="fmt-btn" title="Italic" @click="wrapSelection('_', '_')">
-            <Italic :size="14" />
-          </button>
-          <button type="button" class="fmt-btn" title="Underline" @click="wrapSelection('<u>', '</u>')">
-            <UnderlineIcon :size="14" />
-          </button>
-          <span class="fmt-separator" />
-          <button type="button" class="fmt-btn" title="Bullet list" @click="insertLinePrefix('- ')">
-            <List :size="14" />
-          </button>
-          <button type="button" class="fmt-btn" title="Numbered list" @click="insertLinePrefix('1. ')">
-            <ListOrdered :size="14" />
-          </button>
-          <span class="fmt-separator" />
-          <button type="button" class="fmt-btn" title="Insert link" @click="insertLink">
-            <Link :size="14" />
-          </button>
-        </div>
+        <ComposeToolbar 
+          @wrap="wrapSelection" 
+          @prefix="insertLinePrefix" 
+          @link="insertLink" 
+        />
 
         <label class="body-editor-shell">
           <textarea
@@ -612,94 +339,20 @@ function handleSend() {
           </div>
         </div>
 
-        <Transition name="widget-slide">
-          <div v-if="showAiPanel" class="quick-reply-box">
-            <div v-if="aiShowApplied" class="send-success-overlay flex-center animate-fade-in">
-              <div class="success-content flex-center">
-                <span class="success-icon flex-center"><Check :size="18" /></span>
-                <span class="success-message">Draft applied to editor!</span>
-              </div>
-            </div>
-
-            <div class="reply-header">
-              <div class="reply-header-left">
-                <span class="reply-label">Compose</span>
-                <span class="reply-target">with Bubbles.ai</span>
-              </div>
-              <span class="reply-stage-badge" :class="aiDraftState">
-                {{ aiDraftState === 'empty' ? 'Drafting Stage' : aiDraftState === 'dictating' ? 'Voice Input' : aiDraftState === 'generating' ? 'Drafting...' : 'Review Draft' }}
-              </span>
-            </div>
-
-            <div v-if="aiDraftState === 'empty' || aiDraftState === 'dictating'" class="input-stage-container animate-fade-in">
-              <input ref="aiFileInputRef" type="file" multiple class="hidden-file-input" @change="handleAiFileSelect">
-
-              <AiInputBox
-                  v-model="aiPrompt"
-                  v-model:attachedFiles="aiAttachedFiles"
-                  :isRecording="aiDraftState === 'dictating'"
-                  :disabled="aiDraftState === 'generating'"
-                  @send="generateAiDraft"
-                  @startDictation="startVoiceInput"
-                  @stopDictation="stopVoiceInput"
-                >
-                  <template #toolbar-right>
-                    <button type="button" class="card-outline-draft-btn flex-center" :disabled="aiDraftState === 'dictating'" title="Auto-draft instantly from context" @click="generateAiDraft">
-                      <Sparkles :size="12" /> Auto-draft
-                    </button>
-                  </template>
-                </AiInputBox>
-              <p class="copywriting-hint">
-                Your context above is a guide. AI will generate a professional draft for you to review and edit before sending.
-              </p>
-            </div>
-
-            <div v-else-if="aiDraftState === 'generating' || aiDraftState === 'drafted'" class="drafted-stage-container animate-fade-in">
-              <div class="draft-review-card" :class="{ 'is-streaming': aiDraftState === 'generating' }">
-                <div class="draft-card-header">
-                  <span class="draft-card-title">
-                    <Sparkles v-if="aiDraftState === 'generating'" class="streaming-sparkle" :size="12" />
-                    <Wand2 v-else :size="12" />
-                    {{ aiDraftState === 'generating' ? 'AI is drafting response...' : 'Proposed Email Draft' }}
-                  </span>
-                  <span class="draft-editable-hint">
-                    {{ aiDraftState === 'generating' ? 'Streaming...' : 'Directly editable' }}
-                  </span>
-                </div>
-                <div class="draft-textarea-wrapper">
-                  <textarea
-                    ref="aiDraftRef"
-                    v-model="aiDraft"
-                    class="draft-review-textarea"
-                    placeholder="AI is compiling context and writing draft..."
-                    :disabled="aiDraftState === 'generating'"
-                    @input="onAiDraftInput"
-                  />
-                </div>
-              </div>
-
-              <p class="draft-stage-copywriting">
-                {{ aiDraftState === 'generating' ? 'Please wait while AI processes the message context and streams the email draft.' : 'Review the email above. You can tweak it directly inside the card, update your guidelines below, or apply it to the editor.' }}
-              </p>
-
-              <div v-if="aiDraftState === 'drafted'" class="refine-row">
-                <input v-model="aiPrompt" type="text" placeholder="Ask AI to refine draft (e.g., 'make it more formal' or 'shorten')..." class="refine-input" @keyup.enter="generateAiDraft">
-                <button type="button" class="refine-submit-btn flex-center" :disabled="!aiPrompt.trim()" @click="generateAiDraft">
-                  <RefreshCw :size="12" /> Update Draft
-                </button>
-              </div>
-
-              <div class="drafted-actions">
-                <button type="button" class="discard-draft-btn flex-center" :disabled="aiDraftState === 'generating'" @click="discardAiDraft">
-                  <Trash2 :size="13" /> Discard
-                </button>
-                <button type="button" class="send-final-btn flex-center" :disabled="aiDraftState === 'generating'" @click="applyAiDraft">
-                  <Check :size="13" /> Apply to Editor
-                </button>
-              </div>
-            </div>
-          </div>
-        </Transition>
+        <AiDraftPanel
+          :showAiPanel="showAiPanel"
+          :aiShowApplied="aiShowApplied"
+          :aiDraftState="aiDraftState"
+          v-model:aiPrompt="aiPrompt"
+          v-model:aiDraft="aiDraft"
+          v-model:aiAttachedFiles="aiAttachedFiles"
+          @generate-draft="generateAiDraft"
+          @apply-draft="applyAiDraft"
+          @discard-draft="discardAiDraft"
+          @start-dictation="startVoiceInput"
+          @stop-dictation="stopVoiceInput"
+          mode="compose"
+        />
       </div>
     </div>
 
@@ -1617,423 +1270,6 @@ button:disabled {
 @keyframes wave {
   0%, 100% { transform: scaleY(0.7); }
   50% { transform: scaleY(1.15); }
-}
-
-/* EmailDetail quick-reply parity */
-.quick-reply-box {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background-color: var(--bg-secondary);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 8px 0 12px;
-  position: relative;
-  overflow: hidden;
-  transition: all var(--transition-normal);
-}
-
-.send-success-overlay {
-  position: absolute;
-  inset: 0;
-  background-color: rgba(255, 255, 255, 0.96);
-  z-index: 10;
-  backdrop-filter: blur(4px);
-}
-
-.success-content {
-  flex-direction: column;
-  gap: 12px;
-  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.success-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: hsl(142, 70%, 90%);
-  color: hsl(142, 70%, 25%);
-  border: 1px solid hsl(142, 70%, 80%);
-}
-
-.success-message {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.reply-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.8rem;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-  margin-bottom: 4px;
-}
-
-.reply-header-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.reply-label {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.reply-target {
-  color: var(--text-muted);
-}
-
-.reply-stage-badge {
-  font-size: 0.68rem;
-  font-weight: 500;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
-  color: var(--text-secondary);
-}
-
-.reply-stage-badge.dictating {
-  background-color: hsl(0, 100%, 97%);
-  border-color: hsl(0, 100%, 90%);
-  color: hsl(0, 85%, 45%);
-}
-
-.reply-stage-badge.generating {
-  background-color: hsl(250, 100%, 98%);
-  border-color: hsl(250, 100%, 92%);
-  color: hsl(250, 80%, 45%);
-}
-
-.reply-stage-badge.drafted {
-  background-color: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-primary);
-}
-
-
-
-
-
-
-
-.reply-input-card {
-  border: 1px solid var(--border-color);
-  border-radius: 11px;
-  background-color: var(--bg-primary);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: var(--shadow-sm);
-  transition: background-color var(--transition-fast);
-}
-
-.double-box-outer.is-recording .reply-input-card {
-  background-color: hsl(0, 100%, 99%);
-  border-color: hsl(0, 80%, 90%);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.toolbar-left-actions,
-
-
-
-
-.toolbar-icon-btn:hover:not(:disabled) {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-
-
-.card-outline-draft-btn {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-  gap: 5px;
-  transition: all var(--transition-fast);
-  height: 28px;
-}
-
-.card-outline-draft-btn:hover:not(:disabled) {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-  background-color: var(--bg-secondary);
-}
-
-.card-outline-draft-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-
-
-.reply-input-card:focus-within .card-send-btn,
-
-
-
-
-.copywriting-hint,
-.draft-stage-copywriting {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin-top: 4px;
-}
-
-
-
-
-
-
-
-
-
-
-
-.p1 { height: 6px; animation-delay: 0.1s; }
-.p2 { height: 12px; animation-delay: 0.3s; }
-.p3 { height: 8px; animation-delay: 0.2s; }
-.p4 { height: 10px; animation-delay: 0.4s; }
-
-
-
-.stop-dictate-btn:hover {
-  background-color: var(--border-color);
-}
-
-.draft-review-card {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background-color: var(--bg-primary);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  transition: all var(--transition-fast);
-}
-
-.draft-review-card.is-streaming {
-  border-color: var(--text-muted);
-  box-shadow: 0 0 0 1px var(--border-color);
-}
-
-.draft-card-header {
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  padding: 6px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: auto;
-}
-
-.draft-card-title {
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.draft-editable-hint {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-}
-
-.draft-textarea-wrapper {
-  position: relative;
-  display: flex;
-  width: 100%;
-}
-
-.draft-review-textarea {
-  border: none;
-  background-color: var(--bg-primary);
-  font-family: var(--font-sans);
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--text-primary);
-  padding: 12px;
-  min-height: 145px;
-  max-height: 380px;
-  width: 100%;
-  outline: none;
-  resize: vertical;
-  overflow-y: auto;
-}
-
-.draft-review-textarea:disabled {
-  opacity: 1;
-  color: var(--text-primary);
-}
-
-.streaming-sparkle {
-  color: var(--primary-color);
-  animation: pulseSparkle 1.4s infinite ease-in-out;
-}
-
-.refine-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-  align-items: center;
-  justify-content: initial;
-}
-
-.refine-input {
-  flex: 1;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 0 10px;
-  height: 32px;
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  color: var(--text-primary);
-  background-color: var(--bg-primary);
-  outline: none;
-  transition: border-color var(--transition-fast);
-}
-
-.refine-input:focus {
-  border-color: var(--text-primary);
-}
-
-.refine-submit-btn {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 6px;
-  padding: 0 12px;
-  height: 32px;
-  cursor: pointer;
-  gap: 4px;
-  transition: all var(--transition-fast);
-}
-
-.refine-submit-btn:hover:not(:disabled) {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-
-.refine-submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.drafted-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-  gap: 8px;
-}
-
-.discard-draft-btn {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  border-radius: 8px;
-  padding: 7px 14px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  gap: 6px;
-  transition: all var(--transition-fast);
-}
-
-.discard-draft-btn:hover:not(:disabled) {
-  border-color: hsl(0, 80%, 80%);
-  color: hsl(0, 80%, 40%);
-  background-color: hsl(0, 100%, 98%);
-}
-
-.send-final-btn {
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-  border: none;
-  border-radius: 8px;
-  padding: 7px 20px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  gap: 6px;
-  transition: all var(--transition-fast);
-}
-
-.send-final-btn:hover:not(:disabled) {
-  background-color: var(--text-secondary);
-}
-
-.discard-draft-btn:disabled,
-.send-final-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.25s ease;
-}
-
-@keyframes scaleIn {
-  from { transform: scale(0.9); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-@keyframes voicePulse {
-  0% { transform: scale(0.85); opacity: 0.5; }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(0.85); opacity: 0.5; }
-}
-
-
-
-@keyframes pulseSparkle {
-  0% { transform: scale(0.9); opacity: 0.5; }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.5; }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 @media (max-width: 900px) {

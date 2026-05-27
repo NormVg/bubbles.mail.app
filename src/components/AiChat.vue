@@ -71,36 +71,37 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="ai-chat" :class="{ 'is-fresh': isFreshSession }">
-    <div v-if="isFreshSession" class="welcome-stage animate-fade-in">
+  <div class="ai-chat">
+    
+    <!-- Top spacer to push content to center when fresh -->
+    <div class="smooth-spacer" :style="{ flex: isFreshSession ? 1 : 0 }"></div>
+
+    <div class="welcome-stage" :class="{ 'hide-welcome': !isFreshSession }">
       <div class="welcome-copy">
         <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
       </div>
     </div>
     
     <!-- Chat messages -->
-    <div v-else class="chat-messages animate-fade-in" ref="messageContainer">
+    <div class="chat-messages" :class="{ 'show-chat': !isFreshSession }" ref="messageContainer">
       <div 
         v-for="msg in messages" 
         :key="msg.id" 
         class="message-wrapper"
         :class="msg.sender"
       >
-        <!-- AI response -->
-        <div v-if="msg.sender === 'ai'" class="ai-response animate-fade-in">
+        <div v-if="msg.sender === 'ai'" class="ai-response">
           <div class="ai-msg-header">
             <span class="ai-icon flex-center"><Sparkles :size="12" /></span>
           </div>
           <div class="ai-msg-body" v-html="formatMessageText(msg.text)"></div>
         </div>
 
-        <!-- User message -->
-        <div v-else class="user-msg animate-fade-in">
+        <div v-else class="user-msg">
           <div class="user-msg-text" v-html="formatMessageText(msg.text)"></div>
         </div>
       </div>
       
-      <!-- Thinking indicator -->
       <div v-if="isThinking" class="message-wrapper ai">
         <div class="ai-response thinking">
           <div class="ai-msg-header">
@@ -117,8 +118,8 @@ onMounted(() => {
 
     <div class="chat-bottom-section">
       <!-- Suggestion chips -->
-      <div class="suggestions-bar" v-if="!isThinking">
-        <div class="suggestions-scroll">
+      <div class="suggestions-bar" :class="{ 'hide-suggestions': !isFreshSession && !isThinking && false }">
+        <div class="suggestions-scroll" v-if="!isThinking">
           <button 
             v-for="chip in getSuggestedActions(selectedEmail)" 
             :key="chip" 
@@ -144,6 +145,10 @@ onMounted(() => {
         />
       </div>
     </div>
+
+    <!-- Bottom spacer to push content up when fresh -->
+    <div class="smooth-spacer" :style="{ flex: isFreshSession ? 1 : 0 }"></div>
+
   </div>
 </template>
 
@@ -154,23 +159,33 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background-color: var(--bg-primary);
-  transition: justify-content 0.4s ease;
+  background-color: transparent;
 }
 
-.ai-chat.is-fresh {
-  justify-content: center;
-  align-items: center;
+.smooth-spacer {
+  transition: flex 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 0;
 }
 
 .welcome-stage {
-  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  padding: 0 24px 40px;
-  width: 100%;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  height: auto;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  padding-bottom: 24px;
+}
+
+.welcome-stage.hide-welcome {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+  transform: translateY(-20px) scale(0.98);
 }
 
 .welcome-copy {
@@ -183,6 +198,7 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.03em;
+  margin: 0;
 }
 
 .underlined-brand {
@@ -191,15 +207,25 @@ onMounted(() => {
 }
 
 .chat-messages {
-  flex: 1;
+  flex: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: flex 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease 0.1s;
   overflow-y: auto;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  padding: 0 24px;
   max-width: 720px;
   width: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chat-messages.show-chat {
+  flex: 1;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 20px 24px;
 }
 
 .chat-bottom-section {
@@ -209,17 +235,19 @@ onMounted(() => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-.is-fresh .chat-bottom-section {
-  flex-shrink: 1;
-  margin-bottom: auto;
+  z-index: 10;
 }
 
 .message-wrapper {
   display: flex;
   flex-direction: column;
   width: 100%;
+  animation: slideUpFade 0.3s ease forwards;
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .user-msg {
@@ -326,6 +354,8 @@ onMounted(() => {
   flex-shrink: 0;
   scrollbar-width: none;
   width: 100%;
+  min-height: 38px;
+  transition: all 0.3s ease;
 }
 
 .suggestions-bar::-webkit-scrollbar {
@@ -366,14 +396,5 @@ onMounted(() => {
   padding: 10px 20px 20px;
   flex-shrink: 0;
   width: 100%;
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.4s ease forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 </style>

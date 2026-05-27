@@ -15,6 +15,7 @@ function handleSelectSettingsCategory(catId: string) {
 }
 
 // Head settings for SEO & Premium experience
+// @ts-ignore
 useHead({
   title: 'Bubbles.mail — Daily Intelligence System',
   meta: [

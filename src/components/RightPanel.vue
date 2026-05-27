@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Sparkles, Archive, Trash2, Reply, ReplyAll, Forward } from '@lucide/vue'
+import { Archive, Trash2, Reply, ReplyAll, Forward } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { useAiAssistant } from '../composables/useAiAssistant'
 
