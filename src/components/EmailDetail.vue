@@ -45,7 +45,6 @@ const waveBars = ref<number[]>([12, 24, 8, 16, 28, 14, 20, 10, 18, 6, 22, 12, 16
 let recordInterval: any = null
 
 const draftTextareaRef = ref<HTMLTextAreaElement | null>(null)
-const fileInputRef = ref<HTMLInputElement | null>(null)
 const replyTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 

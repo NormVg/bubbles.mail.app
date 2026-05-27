@@ -7,6 +7,10 @@ import AiInputBox from './common/AiInputBox.vue'
 import { useDictation } from '../composables/useDictation'
 import type { AttachedFile } from './common/AiInputBox.vue'
 
+defineProps<{
+  isFreshSession?: boolean
+}>()
+
 const { selectedEmail } = useMail()
 const { messages, isThinking, getSuggestedActions, sendMessage } = useAiAssistant()
 
@@ -67,9 +71,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="ai-chat">
+  <div class="ai-chat" :class="{ 'is-fresh': isFreshSession }">
+    <div v-if="isFreshSession" class="welcome-stage animate-fade-in">
+      <div class="welcome-copy">
+        <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
+      </div>
+    </div>
+    
     <!-- Chat messages -->
-    <div class="chat-messages" ref="messageContainer">
+    <div v-else class="chat-messages animate-fade-in" ref="messageContainer">
       <div 
         v-for="msg in messages" 
         :key="msg.id" 
@@ -84,7 +94,7 @@ onMounted(() => {
           <div class="ai-msg-body" v-html="formatMessageText(msg.text)"></div>
         </div>
 
-        <!-- User message (Clean architectural styling like Vercel) -->
+        <!-- User message -->
         <div v-else class="user-msg animate-fade-in">
           <div class="user-msg-text" v-html="formatMessageText(msg.text)"></div>
         </div>
@@ -105,35 +115,38 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Suggestion chips (Sitting above the input box as shown in screenshot) -->
-    <div class="suggestions-bar" v-if="!isThinking">
-      <div class="suggestions-scroll">
-        <button 
-          v-for="chip in getSuggestedActions(selectedEmail)" 
-          :key="chip" 
-          class="suggestion-chip"
-          @click="selectSuggestion(chip)"
-          :disabled="isThinking"
-        >
-          {{ chip }}
-        </button>
+    <div class="chat-bottom-section">
+      <!-- Suggestion chips -->
+      <div class="suggestions-bar" v-if="!isThinking">
+        <div class="suggestions-scroll">
+          <button 
+            v-for="chip in getSuggestedActions(selectedEmail)" 
+            :key="chip" 
+            class="suggestion-chip"
+            @click="selectSuggestion(chip)"
+            :disabled="isThinking"
+          >
+            {{ chip }}
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Premium Screenshot 1 Input Box Card -->
-    <div class="chat-input-area">
-      <AiInputBox
-        v-model="inputMessage"
-        v-model:attachedFiles="attachedFiles"
-        :isRecording="isRecording"
-        :disabled="isThinking"
-        @send="handleSend"
-        @startDictation="startVoiceDictation"
-        @stopDictation="stopVoiceDictation"
-      />
+      <!-- Input Box -->
+      <div class="chat-input-area">
+        <AiInputBox
+          v-model="inputMessage"
+          v-model:attachedFiles="attachedFiles"
+          :isRecording="isRecording"
+          :disabled="isThinking"
+          @send="handleSend"
+          @startDictation="startVoiceDictation"
+          @stopDictation="stopVoiceDictation"
+        />
+      </div>
     </div>
   </div>
 </template>
+
 
 <style scoped>
 .ai-chat {
@@ -142,6 +155,39 @@ onMounted(() => {
   height: 100%;
   overflow: hidden;
   background-color: var(--bg-primary);
+  transition: justify-content 0.4s ease;
+}
+
+.ai-chat.is-fresh {
+  justify-content: center;
+  align-items: center;
+}
+
+.welcome-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 24px 40px;
+  width: 100%;
+}
+
+.welcome-copy {
+  text-align: center;
+}
+
+.welcome-title {
+  font-family: var(--font-sans);
+  font-size: 2.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+
+.underlined-brand {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .chat-messages {
@@ -151,9 +197,23 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 600px;
+  max-width: 720px;
   width: 100%;
   margin: 0 auto;
+}
+
+.chat-bottom-section {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-fresh .chat-bottom-section {
+  flex-shrink: 1;
+  margin-bottom: auto;
 }
 
 .message-wrapper {
@@ -162,7 +222,6 @@ onMounted(() => {
   width: 100%;
 }
 
-/* User message — sleek Vercel style bubble */
 .user-msg {
   max-width: 80%;
   align-self: flex-end;
@@ -179,7 +238,6 @@ onMounted(() => {
   box-shadow: var(--shadow-sm);
 }
 
-/* AI response — clean typography */
 .ai-response {
   width: 100%;
   display: flex;
@@ -210,7 +268,6 @@ onMounted(() => {
   padding-left: 24px;
 }
 
-/* Draft blocks */
 :deep(.draft-block) {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -230,7 +287,6 @@ onMounted(() => {
   word-break: break-all;
 }
 
-/* Thinking dots */
 .typing-dots {
   display: flex;
   gap: 4px;
@@ -264,15 +320,12 @@ onMounted(() => {
   100% { transform: scale(1); opacity: 0.7; }
 }
 
-/* Suggestion chips */
 .suggestions-bar {
   padding: 4px 16px 8px;
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: none;
-  max-width: 600px;
   width: 100%;
-  margin: 0 auto;
 }
 
 .suggestions-bar::-webkit-scrollbar {
@@ -309,103 +362,18 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* Premium Card Input Sizing */
 .chat-input-area {
   padding: 10px 20px 20px;
   flex-shrink: 0;
-  background-color: var(--bg-primary);
-  max-width: 600px;
   width: 100%;
-  margin: 0 auto;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Attached File Chips Inside Card */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Toolbar row matching Screenshot 1 */
-
-
-
-
-
-
-.toolbar-icon-btn:hover:not(:disabled) {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-
-
-
-
-.chat-input-card:focus-within 
-
-
-
-
-
-/* Voice Input Inline inside Card view */
-
-
-
-
-@keyframes voicePulse {
-  0% { transform: scale(0.85); opacity: 0.5; }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(0.85); opacity: 0.5; }
-}
-
-
-
-
-
-
-
-.p1 { height: 6px; animation-delay: 0.1s; }
-.p2 { height: 12px; animation-delay: 0.3s; }
-.p3 { height: 8px; animation-delay: 0.2s; }
-.p4 { height: 10px; animation-delay: 0.4s; }
-
-
-
-
-
-.stop-dictate-btn:hover {
-  background-color: var(--border-color);
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.25s ease;
+  animation: fadeIn 0.4s ease forwards;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

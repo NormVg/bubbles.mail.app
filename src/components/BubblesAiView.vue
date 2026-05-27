@@ -1,119 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed } from 'vue'
 import { Sparkles, Trash2 } from '@lucide/vue'
 import AiChat from './AiChat.vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
-import { useMail } from '../composables/useMail'
-import AiInputBox from './common/AiInputBox.vue'
-import { useDictation } from '../composables/useDictation'
-import type { AttachedFile } from './common/AiInputBox.vue'
 
-const { selectedEmail } = useMail()
-const { sessions, currentSessionId, messages, createNewSession, deleteSession, sendMessage } = useAiAssistant()
-
-const inputMessage = ref('')
-const attachedFiles = ref<AttachedFile[]>([])
-
-const { isRecording, startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
-  if (selectedEmail.value) {
-    const sender = selectedEmail.value.sender.split(' ')[0]
-    inputMessage.value = `Can you draft a short, formal response to ${sender} accepting the timeline but suggesting we meet on Google Meet instead of B?`
-  } else {
-    inputMessage.value = result
-  }
-})
+const { sessions, currentSessionId, messages, createNewSession, deleteSession } = useAiAssistant()
 
 const isFreshSession = computed(() => {
   const hasUserMessage = messages.value.some(message => message.sender === 'user')
   return !hasUserMessage && messages.value.length <= 1
 })
-
-const transitionToChat = ref(false)
-const justTransitioned = ref(false)
-const containerRef = ref<HTMLElement | null>(null)
-const welcomeComposerRef = ref<HTMLElement | null>(null)
-const transitionLeft = ref(0)
-const transitionTop = ref(0)
-const transitionWidth = ref(0)
-const transitionOffsetY = ref(0)
-const transitionArmed = ref(false)
-
-const shouldShowWelcome = computed(() => isFreshSession.value || transitionToChat.value)
-
-const TRANSITION_MS = 520
-const BOTTOM_OFFSET_PX = 24
-
-function beginWelcomeToChatTransition() {
-  if (transitionToChat.value) return
-  const composerEl = welcomeComposerRef.value
-  const containerEl = containerRef.value
-  if (!composerEl || !containerEl) return
-
-  const composerRect = composerEl.getBoundingClientRect()
-  const containerRect = containerEl.getBoundingClientRect()
-
-  transitionLeft.value = composerRect.left
-  transitionTop.value = composerRect.top
-  transitionWidth.value = composerRect.width
-  transitionOffsetY.value = 0
-  transitionArmed.value = false
-
-  transitionToChat.value = true
-
-  nextTick(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const endTop = containerRect.top + containerRect.height - composerRect.height - BOTTOM_OFFSET_PX
-        transitionOffsetY.value = endTop - composerRect.top
-        transitionArmed.value = true
-      })
-    })
-  })
-
-  window.setTimeout(() => {
-    transitionToChat.value = false
-    transitionArmed.value = false
-    justTransitioned.value = true
-    window.setTimeout(() => {
-      justTransitioned.value = false
-    }, 1000)
-  }, TRANSITION_MS)
-}
-
-function handleStartChat() {
-  if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
-
-  // Keep welcome UI mounted briefly and animate composer down.
-  // (isFreshSession will flip to false immediately, so we override via transitionToChat.)
-  beginWelcomeToChatTransition()
-
-  let formattedText = inputMessage.value.trim()
-
-  if (attachedFiles.value.length > 0) {
-    const fileNames = attachedFiles.value.map(file => `"${file.name}" (${file.size})`).join(', ')
-    const prefix = formattedText ? `${formattedText}\n\n` : ''
-    formattedText = `${prefix}📎 Attached files: ${fileNames}`
-  }
-
-  sendMessage(formattedText, selectedEmail.value)
-
-  if (transitionToChat.value) {
-    window.setTimeout(() => {
-      inputMessage.value = ''
-      attachedFiles.value = []
-    }, TRANSITION_MS)
-  } else {
-    inputMessage.value = ''
-    attachedFiles.value = []
-    nextTick(() => {
-    })
-  }
-}
 </script>
 
 <template>
-  <section ref="containerRef" class="pane pane-right bubbles-ai-page">
-    <div v-if="shouldShowWelcome" class="bubbles-ai-backdrop" aria-hidden="true">
+  <section class="pane pane-right bubbles-ai-page">
+    <div v-if="isFreshSession" class="bubbles-ai-backdrop" aria-hidden="true">
       <div class="dither-layer" />
       <div class="dither-vignette" />
     </div>
@@ -152,32 +53,8 @@ function handleStartChat() {
         </div>
       </div>
 
-      <div class="ai-chat-wrapper" :class="{ 'just-transitioned': justTransitioned }">
-        <div v-if="shouldShowWelcome" class="welcome-stage animate-fade-in">
-          <div class="welcome-copy">
-            <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
-          </div>
-
-          <div
-            ref="welcomeComposerRef"
-            class="welcome-composer"
-            :class="{ 'is-transitioning': transitionToChat, 'is-armed': transitionArmed }"
-            :style="transitionToChat
-              ? { left: `${transitionLeft}px`, top: `${transitionTop}px`, width: `${transitionWidth}px`, transform: `translateY(${transitionArmed ? transitionOffsetY : 0}px)` }
-              : {}"
-          >
-            <AiInputBox
-              v-model="inputMessage"
-              v-model:attachedFiles="attachedFiles"
-              :isRecording="isRecording"
-              @send="handleStartChat"
-              @startDictation="startVoiceDictation"
-              @stopDictation="stopVoiceDictation"
-            />
-          </div>
-        </div>
-
-        <AiChat v-if="!shouldShowWelcome" />
+      <div class="ai-chat-wrapper">
+        <AiChat :isFreshSession="isFreshSession" />
       </div>
     </div>
   </section>

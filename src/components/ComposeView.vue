@@ -25,7 +25,6 @@ import {
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import AiInputBox from './common/AiInputBox.vue'
-import { useDictation } from '../composables/useDictation'
 
 const { activeAccount, setViewMode } = useMail()
 
@@ -78,7 +77,6 @@ const ccInputRef = ref<HTMLInputElement | null>(null)
 const bccInputRef = ref<HTMLInputElement | null>(null)
 const bodyTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const aiFileInputRef = ref<HTMLInputElement | null>(null)
 const aiPromptRef = ref<HTMLTextAreaElement | null>(null)
 const aiDraftRef = ref<HTMLTextAreaElement | null>(null)
 
@@ -651,7 +649,6 @@ function handleSend() {
                     </button>
                   </template>
                 </AiInputBox>
-              </div>
               <p class="copywriting-hint">
                 Your context above is a guide. AI will generate a professional draft for you to review and edit before sending.
               </p>
