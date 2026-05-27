@@ -649,12 +649,6 @@ export const useMailStore = defineStore('mail', () => {
       return
     }
 
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      const { openUrl } = await import('@tauri-apps/plugin-opener')
-      await openUrl(authUrl)
-      return
-    }
-
     window.location.assign(authUrl)
   }
 
