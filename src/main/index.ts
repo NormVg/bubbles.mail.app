@@ -125,7 +125,7 @@ function startOAuthCallbackServer() {
     const parsedUrl = parse(req.url || '', true)
     const { pathname, query } = parsedUrl
 
-    if (pathname === '/api/gmail/callback') {
+    if (pathname === '/api/gmail/callback' || pathname === '/api/auth/callback/google') {
       const code = typeof query.code === 'string' ? query.code : ''
       const state = typeof query.state === 'string' ? query.state : ''
 
