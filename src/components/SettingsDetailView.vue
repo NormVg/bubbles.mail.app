@@ -113,7 +113,7 @@ function saveAllSettings() {
   </div>
 </template>
 
-<style scoped>
+<style>
 .settings-detail {
   display: flex;
   flex-direction: column;
