@@ -8,6 +8,7 @@
     "build": "nuxi build",
     "generate": "nuxi generate",
     "preview": "nuxi preview",
+    "test:gmail": "tsx scripts/check-gmail-api.ts",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -15,14 +16,29 @@
     "@pinia/nuxt": "^0.11.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "better-sqlite3": "^12.10.0",
+    "drizzle-orm": "^0.45.2",
+    "googleapis": "^172.0.0",
+    "h3": "1.15.11",
     "pinia": "^3.0.4",
-    "vue": "^3.5.34"
+    "vue": "^3.5.34",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^6.0.7",
+    "drizzle-kit": "^0.31.10",
     "nuxt": "^4.4.6",
+    "tsx": "^4.22.3",
     "vite": "^8.0.14",
     "vue-tsc": "^3.3.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }
