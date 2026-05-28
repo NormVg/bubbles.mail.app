@@ -92,6 +92,11 @@ watch(selectedEmail, () => {
       generateEmailSummary()
     }
   }
+
+  // Reset draft state when switching emails
+  draftState.value = 'empty'
+  generatedDraft.value = ''
+  instructionText.value = ''
 })
 
 // Interactive reply states
@@ -187,9 +192,18 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
     urlString,
     { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
-      onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
-      onFinish: () => writer.close(),
-      onError: (err: any) => writer.abort(err)
+      onChunk: (chunk: string) => {
+        console.log('[EmailDetail] Streaming chunk received:', chunk.slice(0, 20))
+        writer.write(new TextEncoder().encode(chunk))
+      },
+      onFinish: () => {
+        console.log('[EmailDetail] Streaming finished.')
+        writer.close()
+      },
+      onError: (err: any) => {
+        console.error('[EmailDetail] Streaming error:', err)
+        writer.abort(err)
+      }
     }
   )
 
@@ -200,6 +214,7 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
 
 const { completion: aiCompletion, complete: completeAiDraft } = useCompletion({
   api: '/api/ai/reply',
+  streamProtocol: 'text',
   fetch: ipcStreamFetch,
   onFinish: () => {
     draftState.value = 'drafted'
@@ -228,7 +243,10 @@ async function generateDraft() {
   draftState.value = 'generating'
   generatedDraft.value = ''
 
-  const context = selectedEmail.value ? selectedEmail.value.body : ''
+  // Truncate context to prevent Ollama 500 errors on massive emails
+  const rawBody = selectedEmail.value ? selectedEmail.value.body : ''
+  const context = rawBody.length > 4000 ? rawBody.slice(0, 4000) + '... (truncated)' : rawBody
+
   const prompt = instructionText.value.trim()
 
   await completeAiDraft(prompt, {

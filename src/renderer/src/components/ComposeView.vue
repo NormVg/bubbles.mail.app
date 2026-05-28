@@ -270,7 +270,9 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
     urlString,
     { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
-      onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
+      onChunk: (chunk: string) => {
+        writer.write(new TextEncoder().encode(chunk))
+      },
       onFinish: () => writer.close(),
       onError: (err: any) => writer.abort(err)
     }
@@ -283,6 +285,7 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
 
 const { completion: aiCompletion, complete: completeAiDraft } = useCompletion({
   api: '/api/ai/draft',
+  streamProtocol: 'text',
   fetch: ipcStreamFetch,
   onFinish: () => {
     aiDraftState.value = 'drafted'

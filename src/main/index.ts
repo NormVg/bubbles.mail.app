@@ -715,6 +715,7 @@ You MUST strictly use the exact keys from the schema:
           abortSignal: controller.signal
         })
       } else if (path === '/api/ai/reply') {
+        console.log(`[Stream IPC] Starting reply generation for ${modelName}...`)
         result = await streamText({
           model: ollama(modelName),
           system: 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
@@ -722,6 +723,7 @@ You MUST strictly use the exact keys from the schema:
           abortSignal: controller.signal
         })
       } else if (path === '/api/ai/chat') {
+        console.log(`[Stream IPC] Starting chat generation for ${modelName}...`)
         const fullPrompt = parsedBody.history
           ? `${parsedBody.history}\n\nUser: ${parsedBody.prompt}`
           : parsedBody.prompt
@@ -735,15 +737,22 @@ You MUST strictly use the exact keys from the schema:
         throw new Error('Unknown streaming path')
       }
 
+      console.log(`[Stream IPC] Stream started, waiting for chunks...`)
       for await (const chunk of result.textStream) {
-        if (controller.signal.aborted) break
+        if (controller.signal.aborted) {
+          console.log(`[Stream IPC] Stream aborted by client.`)
+          break
+        }
+        console.log(`[Stream IPC] Chunk received:`, chunk.slice(0, 20) + '...')
         event.sender.send(`stream-chunk-${streamId}`, chunk)
       }
 
       if (!controller.signal.aborted) {
+        console.log(`[Stream IPC] Stream finished naturally.`)
         event.sender.send(`stream-finish-${streamId}`)
       }
     } catch (err: any) {
+      console.error(`[Stream IPC] Error caught:`, err.message)
       if (err.name !== 'AbortError') {
         event.sender.send(`stream-error-${streamId}`, err.message)
       }
