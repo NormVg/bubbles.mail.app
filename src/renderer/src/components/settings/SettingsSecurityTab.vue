@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Key, EyeOff, Eye, Check, AlertCircle } from '@lucide/vue'
+import { EyeOff, Eye, Check, AlertCircle } from '@lucide/vue'
 
 const props = defineProps<{
   apiKey: string

@@ -1,4 +1,38 @@
 import { ref, computed } from 'vue'
+import { Email } from './useMail'
+import { useSettings } from './useSettings'
+
+export interface Message {
+  id: string
+  sender: 'user' | 'ai'
+  text: string
+  timestamp: Date
+  contextEmails?: { id: string; subject: string }[]
+}
+
+export interface ChatSession {
+  id: string
+  title: string
+  messages: Message[]
+}
+
+// Initial session mock data
+const initialSessions: ChatSession[] = [
+  {
+    id: 's1',
+    title: 'New Chat',
+    messages: [
+      {
+        id: 'm1',
+        sender: 'ai',
+        text: `Hello Alicia! How can I help you manage your inbox or draft responses today?`,
+        timestamp: new Date(Date.now() - 600000)
+      }
+    ]
+  }
+]
+
+import { defineStore, storeToRefs } from 'pinia'
 
 export const useAiStore = defineStore('aiAssistant', () => {
   // Load from localStorage if available
