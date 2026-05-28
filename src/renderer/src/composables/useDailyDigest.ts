@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useSettings } from './useSettings'
 
 export interface DigestTask {
   id: string
@@ -31,6 +32,7 @@ export interface DailyReport {
   deadlines: DigestDeadline[]
   threads: DigestThread[]
   insights: string[]
+  latestEmailTimestamp?: number
 }
 
 // Stateful references
@@ -68,25 +70,128 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     }
   }
 
+  const isGeneratingDigest = ref(false)
+
+  const getCacheKey = (accountId: string, dateKey: string) => `digest_${accountId}_${dateKey}`
+
+  const loadCachedDigest = (accountId: string, dateKey: string): DailyReport | null => {
+    const cached = localStorage.getItem(getCacheKey(accountId, dateKey))
+    if (cached) {
+      try {
+        return JSON.parse(cached) as DailyReport
+      } catch (e) {
+        return null
+      }
+    }
+    return null
+  }
+
+  const saveDigestToCache = (accountId: string, dateKey: string, report: DailyReport) => {
+    localStorage.setItem(getCacheKey(accountId, dateKey), JSON.stringify(report))
+  }
+
+  const generateDigest = async (accountId: string, dateKey: string, dateFormatted: string, emails: any[]) => {
+    isGeneratingDigest.value = true
+    try {
+      const { settings } = useSettings()
+      
+      const payload = {
+        model: settings.value.digestModel,
+        emails: emails.map(e => ({
+          id: e.id,
+          sender: e.sender,
+          subject: e.subject,
+          body: e.body.substring(0, 500) // Truncate body to save context window
+        }))
+      }
+
+      const res = await window.electronAPI.invokeApi('/api/ai/digest', {
+        method: 'POST',
+        body: payload
+      })
+
+      const latestEmailTimestamp = emails.reduce((max, e) => Math.max(max, e.timestamp || 0), 0)
+
+      const report: DailyReport = {
+        dateKey,
+        dateFormatted,
+        summary: res.summary || [],
+        tasks: (res.tasks || []).map((t: any) => ({ ...t, id: `t_${Math.random()}`, completed: false })),
+        deadlines: (res.deadlines || []).map((d: any) => ({ ...d, id: `d_${Math.random()}` })),
+        threads: (res.threads || []).map((t: any) => ({ ...t, id: `th_${Math.random()}` })),
+        insights: res.insights || [],
+        latestEmailTimestamp
+      }
+
+      saveDigestToCache(accountId, dateKey, report)
+      
+      const existingIdx = dailyReports.value.findIndex(r => r.dateKey === dateKey)
+      if (existingIdx !== -1) {
+        dailyReports.value[existingIdx] = report
+      } else {
+        dailyReports.value.push(report)
+      }
+
+      return report
+    } catch (e) {
+      console.error('[useDailyDigest] Failed to generate digest:', e)
+      throw e
+    } finally {
+      isGeneratingDigest.value = false
+    }
+  }
+
+  const checkAndGenerateDigest = async (accountId: string, dateKey: string, dateFormatted: string, emailsForDay: any[]) => {
+    if (emailsForDay.length === 0) {
+      const existingIdx = dailyReports.value.findIndex(r => r.dateKey === dateKey)
+      if (existingIdx !== -1) dailyReports.value.splice(existingIdx, 1)
+      return
+    }
+
+    const latestEmailTimestamp = emailsForDay.reduce((max, e) => Math.max(max, e.timestamp || 0), 0)
+    
+    let report = dailyReports.value.find(r => r.dateKey === dateKey)
+    if (!report) {
+      report = loadCachedDigest(accountId, dateKey)
+      if (report) {
+        dailyReports.value.push(report)
+      }
+    }
+
+    if (!report || (report.latestEmailTimestamp || 0) < latestEmailTimestamp) {
+      await generateDigest(accountId, dateKey, dateFormatted, emailsForDay)
+    }
+  }
+
+  const regenerateDigest = async (accountId: string, dateKey: string, dateFormatted: string, emailsForDay: any[]) => {
+    await generateDigest(accountId, dateKey, dateFormatted, emailsForDay)
+  }
+
   return {
     dailyReports,
     selectedDateKey,
     selectedReport,
+    isGeneratingDigest,
     setSelectedDateKey,
     toggleTask,
-    addTask
+    addTask,
+    checkAndGenerateDigest,
+    regenerateDigest
   }
 })
 
 export function useDailyDigest() {
   const store = useDigestStore()
-  const { dailyReports, selectedDateKey, selectedReport } = storeToRefs(store)
+  const { dailyReports, selectedDateKey, selectedReport, isGeneratingDigest } = storeToRefs(store)
   return {
     dailyReports,
     selectedDateKey,
     selectedReport,
+    isGeneratingDigest,
     setSelectedDateKey: store.setSelectedDateKey,
     toggleTask: store.toggleTask,
-    addTask: store.addTask
+    addTask: store.addTask,
+    checkAndGenerateDigest: store.checkAndGenerateDigest,
+    regenerateDigest: store.regenerateDigest
   }
 }

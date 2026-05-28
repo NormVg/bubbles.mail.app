@@ -11,6 +11,7 @@ export interface AiSettings {
   syncInterval: number // in minutes
   apiKey: string
   ollamaModel: string
+  digestModel: string
   sarvamApiKey: string
 }
 
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: AiSettings = {
   syncInterval: 5,
   apiKey: 'bb-live-8a3c9f2d1e0b5a6c7e8d',
   ollamaModel: '',
+  digestModel: '',
   sarvamApiKey: ''
 }
 
@@ -59,12 +61,13 @@ function saveSettings(newSettings: AiSettings) {
 loadSettings()
 
 // If no model is saved, auto-detect from Ollama on startup
-if (!settings.value.ollamaModel) {
+if (!settings.value.ollamaModel || !settings.value.digestModel) {
   fetch('http://localhost:11434/api/tags')
     .then(res => res.json())
     .then((data: any) => {
-      if (data.models && data.models.length > 0 && !settings.value.ollamaModel) {
-        settings.value.ollamaModel = data.models[0].name
+      if (data.models && data.models.length > 0) {
+        if (!settings.value.ollamaModel) settings.value.ollamaModel = data.models[0].name
+        if (!settings.value.digestModel) settings.value.digestModel = data.models[0].name
       }
     })
     .catch(() => { /* Ollama not running, user will set manually */ })

@@ -34,7 +34,7 @@ const {
   syncActiveGmailAccount
 } = useMail()
 
-const { selectedDateKey, setSelectedDateKey: setDateKey } = useDailyDigest()
+const { selectedDateKey, setSelectedDateKey: setDateKey, checkAndGenerateDigest } = useDailyDigest()
 
 function setSelectedDateKey(date: string) {
   setDateKey(date)
@@ -46,6 +46,11 @@ function setSelectedDateKey(date: string) {
   setTimeout(() => {
     const firstMail = filteredEmails.value[0]
     setSelectedEmailId(firstMail ? firstMail.id : null)
+    
+    // Auto-generate AI digest if in digest mode
+    if (activeAccount.value && viewMode.value === 'digest') {
+      checkAndGenerateDigest(activeAccount.value, date, date, filteredEmails.value)
+    }
   }, 0)
 }
 
@@ -77,6 +82,11 @@ function handleWindowFocus() {
 onMounted(() => {
   void refreshGmailAccounts()
   window.addEventListener('focus', handleWindowFocus)
+
+  // Auto-select "Today" on startup if nothing is selected
+  if (!selectedDateKey.value) {
+    setSelectedDateKey('Today')
+  }
 })
 
 onUnmounted(() => {

@@ -1,10 +1,44 @@
 <script setup lang="ts">
-import { Sparkles, Lightbulb } from '@lucide/vue'
+import { watch, onMounted } from 'vue'
+import { Sparkles, Lightbulb, RefreshCw } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 
-const { setViewMode, setSelectedEmailId } = useMail()
-const { selectedReport, toggleTask } = useDailyDigest()
+const { setViewMode, setSelectedEmailId, activeAccount, filteredEmails } = useMail()
+const { selectedReport, toggleTask, isGeneratingDigest, selectedDateKey, checkAndGenerateDigest, regenerateDigest } = useDailyDigest()
+
+function triggerRegeneration() {
+  if (activeAccount.value && selectedDateKey.value) {
+    regenerateDigest(
+      activeAccount.value, 
+      selectedDateKey.value, 
+      selectedDateKey.value, 
+      filteredEmails.value
+    )
+  }
+}
+
+// Pseudo-random processing delays for the full-cover matrix loader
+const matrixDelays = Array.from({ length: 800 }, () => Math.random() * 2)
+
+function triggerGenerationCheck() {
+  if (activeAccount.value && selectedDateKey.value) {
+    checkAndGenerateDigest(
+      activeAccount.value, 
+      selectedDateKey.value, 
+      selectedDateKey.value, 
+      filteredEmails.value
+    )
+  }
+}
+
+onMounted(() => {
+  triggerGenerationCheck()
+})
+
+watch([selectedDateKey, activeAccount], () => {
+  triggerGenerationCheck()
+})
 
 // Traceability: Switch back to Traditional Inbox mode and focus the source email!
 function viewSourceEmail(emailId: string) {
@@ -14,16 +48,38 @@ function viewSourceEmail(emailId: string) {
 </script>
 
 <template>
-  <div v-if="selectedReport" class="daily-digest animate-fade-in">
+  <div v-if="isGeneratingDigest" class="daily-digest digest-empty animate-fade-in" style="padding: 0; display: flex; flex-direction: column;">
+    <div class="canvas-card">
+      <div class="full-matrix-bg">
+        <div 
+          class="matrix-cube" 
+          v-for="i in 800" 
+          :key="i"
+          :style="{ animationDelay: `-${matrixDelays[i-1]}s` }"
+        ></div>
+      </div>
+      <div class="canvas-content">
+        <h3 class="canvas-title">Analyzing your emails...</h3>
+        <p class="canvas-subtitle">Bubbles is generating your daily intelligence report. This usually takes 10-30 seconds depending on your AI model.</p>
+      </div>
+    </div>
+  </div>
+
+  <div v-else-if="selectedReport" class="daily-digest animate-fade-in">
     <!-- Date Header -->
     <div class="digest-header">
       <div class="digest-header-left">
         <span class="digest-meta"><Sparkles :size="14" /> Daily summary</span>
         <h3 class="digest-date">{{ selectedReport.dateFormatted }}</h3>
       </div>
-      <button class="view-emails-btn flex-center" @click="setViewMode('inbox')" title="View all emails for this day">
-        View emails &rarr;
-      </button>
+      <div class="digest-header-actions">
+        <button class="view-emails-btn flex-center" @click="triggerRegeneration" title="Regenerate digest">
+          <RefreshCw :size="12" style="margin-right: 4px;" /> Regenerate
+        </button>
+        <button class="view-emails-btn flex-center" @click="setViewMode('inbox')" title="View all emails for this day">
+          View emails &rarr;
+        </button>
+      </div>
     </div>
 
     <!-- Section 1: Executive Summary Card -->
@@ -209,6 +265,12 @@ function viewSourceEmail(emailId: string) {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+}
+
+.digest-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .digest-header-left {
@@ -600,5 +662,80 @@ function viewSourceEmail(emailId: string) {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Canvas Style Loading State */
+.canvas-card {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+/* Full background matrix grid */
+.full-matrix-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 4px);
+  grid-auto-rows: 4px;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  z-index: 0;
+  opacity: 0.6;
+  overflow: hidden;
+  /* Fade out the matrix at the edges so it blends beautifully */
+  -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 95%);
+  mask-image: radial-gradient(circle at center, black 30%, transparent 95%);
+}
+
+.matrix-cube {
+  width: 100%;
+  height: 100%;
+  background-color: var(--primary-color);
+  border-radius: 1px;
+  animation: data-process 2s ease-in-out infinite alternate;
+}
+
+.canvas-content {
+  position: relative;
+  z-index: 2;
+  background-color: var(--bg-primary);
+  /* Glassmorphism for the floating card */
+  background: var(--bg-glass, rgba(255, 255, 255, 0.6));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 24px 28px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+}
+
+.canvas-title {
+  font-family: var(--font-title);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.canvas-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 320px;
+}
+
+@keyframes data-process {
+  0% { opacity: 0.02; transform: scale(0.5); }
+  100% { opacity: 0.5; transform: scale(1.2); box-shadow: 0 0 6px var(--primary-color); }
 }
 </style>

@@ -63,6 +63,10 @@ const ollamaModel = computed({
   get: () => settings.value.ollamaModel,
   set: (val) => settings.value.ollamaModel = val
 })
+const digestModel = computed({
+  get: () => settings.value.digestModel,
+  set: (val) => settings.value.digestModel = val
+})
 const sarvamApiKey = computed({
   get: () => settings.value.sarvamApiKey,
   set: (val) => settings.value.sarvamApiKey = val
@@ -112,6 +116,7 @@ function saveAllSettings() {
           v-model:autoDraftReplies="autoDraftReplies"
           v-model:enableVoiceDictation="enableVoiceDictation"
           v-model:ollamaModel="ollamaModel"
+          v-model:digestModel="digestModel"
         />
 
         <SettingsAgentTab

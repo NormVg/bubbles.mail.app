@@ -35,7 +35,8 @@ import { createGmailAuthUrl } from './utils/gmail/oauth'
 import { connectGmailAccountFromCallback, listCachedMessages, sendGmailMessage, syncGmailMessages, readGmailMessage, applyGmailMessageAction } from './utils/gmail/service'
 
 import { ollama } from 'ai-sdk-ollama'
-import { streamText } from 'ai'
+import { streamText, generateText, Output } from 'ai'
+import { z } from 'zod'
 import { SarvamAIClient } from 'sarvamai'
 import { Readable } from 'stream'
 
@@ -316,6 +317,123 @@ app.whenReady().then(async () => {
           console.warn('[Electron IPC] Failed to fetch Ollama models:', err.message)
           return []
         }
+      }
+
+      // AI Digest POST /api/ai/digest
+      if (cleanPath === '/api/ai/digest' && method === 'POST') {
+        const body = options.body || {}
+        if (!body.emails || !Array.isArray(body.emails)) throw new Error('Missing emails array')
+        if (!body.model) throw new Error('No AI model selected in settings.')
+
+        console.log(`[Electron IPC] Generating AI Digest for ${body.emails.length} emails using ${body.model}...`)
+
+        const digestSchema = z.object({
+          summary: z.array(z.string()).describe("A high-level bulleted summary of the day's important emails."),
+          tasks: z.array(z.object({
+            text: z.string(),
+            sourceEmailId: z.string()
+          })).describe("Actionable tasks extracted from emails."),
+          deadlines: z.array(z.object({
+            text: z.string(),
+            urgency: z.enum(['high', 'medium', 'low']),
+            sourceEmailId: z.string()
+          })).describe("Important deadlines or time-sensitive events."),
+          threads: z.array(z.object({
+            who: z.string(),
+            topic: z.string(),
+            summary: z.string(),
+            status: z.string(),
+            sourceEmailId: z.string()
+          })).describe("Important email threads or conversations."),
+          insights: z.array(z.string()).describe("Key takeaways, tone analysis, or important patterns.")
+        })
+
+        const digestSystemPrompt = "You are an intelligent executive email assistant. Your job is to analyze the user's daily emails and generate a structured Daily Digest report. Keep summaries short, professional, and highly actionable.\n\nYou MUST return a JSON object with EXACTLY these keys and structures:\n- summary: string[] (bullet points)\n- tasks: { text: string, sourceEmailId: string }[]\n- deadlines: { text: string, urgency: \"high\"|\"medium\"|\"low\", sourceEmailId: string }[]\n- threads: { who: string, topic: string, summary: string, status: string, sourceEmailId: string }[]\n- insights: string[]\n\nCRITICAL: Use ONLY these exact field names. 'text' not 'description' or 'task'. 'urgency' must be exactly 'high', 'medium', or 'low'. For 'sourceEmailId', use the exact 'id' from the input email. Do NOT wrap in markdown fences."
+
+        const digestPrompt = `Emails to analyze:\n${JSON.stringify(body.emails)}`
+
+        // Helper: attempt to repair a raw LLM response into our schema
+        function repairDigestResponse(rawText: string): any | null {
+          try {
+            // Strip markdown fences if present
+            let cleaned = rawText.trim()
+            if (cleaned.startsWith('```')) {
+              cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+            }
+            const parsed = JSON.parse(cleaned)
+
+            // Map misnamed fields to the correct schema
+            const summary = parsed.summary || parsed.executiveSummary || []
+            const rawTasks = parsed.tasks || parsed.actionItems || parsed.action_items || []
+            const rawDeadlines = parsed.deadlines || []
+            const rawThreads = parsed.threads || parsed.activeThreads || parsed.active_threads || []
+            const insights = parsed.insights || parsed.observations || []
+
+            const tasks = rawTasks.map((t: any) => ({
+              text: t.text || t.description || t.task || String(t),
+              sourceEmailId: t.sourceEmailId || t.source_email_id || t.emailId || ''
+            }))
+
+            const coerceUrgency = (val: any): 'high' | 'medium' | 'low' => {
+              const s = String(val || '').toLowerCase()
+              if (s.includes('high') || s.includes('urgent') || s.includes('immediate')) return 'high'
+              if (s.includes('low') || s.includes('minor')) return 'low'
+              return 'medium'
+            }
+
+            const deadlines = rawDeadlines.map((d: any) => ({
+              text: d.text || d.description || d.deadline || String(d),
+              urgency: coerceUrgency(d.urgency || d.priority),
+              sourceEmailId: d.sourceEmailId || d.source_email_id || d.emailId || ''
+            }))
+
+            const threads = rawThreads.map((t: any) => ({
+              who: t.who || t.participants?.join?.(', ') || t.sender || t.from || 'Unknown',
+              topic: t.topic || t.subject || t.title || 'General',
+              summary: t.summary || t.description || '',
+              status: t.status || 'Active',
+              sourceEmailId: t.sourceEmailId || t.source_email_id || t.emailId || ''
+            }))
+
+            return { summary, tasks, deadlines, threads, insights }
+          } catch (e) {
+            return null
+          }
+        }
+
+        const MAX_RETRIES = 3
+        let lastError: any = null
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          console.log(`[Electron IPC] Digest generation attempt ${attempt}/${MAX_RETRIES}...`)
+          try {
+            const result = await generateText({
+              model: ollama(body.model),
+              output: Output.object({ schema: digestSchema }),
+              system: digestSystemPrompt,
+              prompt: digestPrompt
+            })
+            console.log(`[Electron IPC] Digest generation complete on attempt ${attempt}.`)
+            return result.output
+          } catch (error: any) {
+            lastError = error
+            console.warn(`[Electron IPC] Digest attempt ${attempt} failed:`, error.message || error)
+
+            // Try to repair from the raw text in the error
+            const rawText = error?.text || error?.cause?.text
+            if (rawText) {
+              console.log(`[Electron IPC] Attempting manual JSON repair...`)
+              const repaired = repairDigestResponse(rawText)
+              if (repaired) {
+                console.log(`[Electron IPC] Manual repair successful!`)
+                return repaired
+              }
+            }
+          }
+        }
+
+        console.error(`[Electron IPC] All ${MAX_RETRIES} digest attempts failed.`)
+        throw lastError
       }
 
       // 1. GET /api/gmail/accounts

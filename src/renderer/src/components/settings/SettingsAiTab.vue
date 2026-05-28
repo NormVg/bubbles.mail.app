@@ -8,13 +8,15 @@ const props = defineProps<{
   autoDraftReplies: boolean
   enableVoiceDictation: boolean
   ollamaModel: string
+  digestModel: string
 }>()
 
 const emit = defineEmits([
   'update:autoGenerateSummary',
   'update:autoDraftReplies',
   'update:enableVoiceDictation',
-  'update:ollamaModel'
+  'update:ollamaModel',
+  'update:digestModel'
 ])
 
 const models = ref<{ name: string; size: number }[]>([])
@@ -32,6 +34,9 @@ async function fetchModels() {
       // If the selected model is not in the fetched list, default to the first one available if empty
       if ((!props.ollamaModel || !list.some(m => m.name === props.ollamaModel)) && list.length > 0) {
         emit('update:ollamaModel', list[0].name)
+      }
+      if ((!props.digestModel || !list.some(m => m.name === props.digestModel)) && list.length > 0) {
+        emit('update:digestModel', list[0].name)
       }
     } else {
       ollamaStatus.value = 'offline'
@@ -104,6 +109,37 @@ function formatSize(bytes: number): string {
               <option 
                 v-for="model in models" 
                 :key="model.name" 
+                :value="model.name"
+              >
+                {{ model.name }} ({{ formatSize(model.size) }})
+              </option>
+            </select>
+            <ChevronDown :size="14" class="select-arrow" />
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row-card column-layout">
+        <div class="setting-card-header-row">
+          <div class="setting-card-left">
+            <h4 class="setting-title">Daily Digest Model</h4>
+            <p class="setting-subtitle">Select the LLM model used for complex background generation of your Daily Intelligence report. A larger model is recommended.</p>
+          </div>
+        </div>
+
+        <div class="model-select-wrapper">
+          <div class="select-container" :class="{ 'disabled': ollamaStatus === 'offline' }">
+            <Cpu :size="16" class="select-icon" />
+            <select
+              :value="digestModel"
+              @change="emit('update:digestModel', ($event.target as HTMLInputElement).value)"
+              class="premium-select"
+              :disabled="ollamaStatus === 'offline'"
+            >
+              <option v-if="models.length === 0" value="">No models available</option>
+              <option 
+                v-for="model in models" 
+                :key="'digest-'+model.name" 
                 :value="model.name"
               >
                 {{ model.name }} ({{ formatSize(model.size) }})
