@@ -21,13 +21,20 @@
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.66",
+    "@ai-sdk/vue": "^3.0.191",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@lucide/vue": "^1.16.0",
+    "ai": "^6.0.191",
+    "ai-sdk-ollama": "^3.8.4",
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.2",
     "googleapis": "^172.0.0",
+    "marked": "^18.0.4",
     "pinia": "^3.0.4",
+    "sarvamai": "^1.1.7",
+    "vue-stream-markdown": "^1.0.0-beta.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

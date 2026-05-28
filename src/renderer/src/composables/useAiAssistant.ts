@@ -1,11 +1,13 @@
 import { ref, computed } from 'vue'
 import { Email } from './useMail'
+import { useSettings } from './useSettings'
 
 export interface Message {
   id: string
   sender: 'user' | 'ai'
   text: string
   timestamp: Date
+  contextEmails?: { id: string; subject: string }[]
 }
 
 export interface ChatSession {
@@ -31,11 +33,48 @@ const initialSessions: ChatSession[] = [
 ]
 
 import { defineStore, storeToRefs } from 'pinia'
+import { watch } from 'vue'
 
 export const useAiStore = defineStore('aiAssistant', () => {
-  const sessions = ref<ChatSession[]>(initialSessions)
-  const currentSessionId = ref<string>('s1')
+  // Load from localStorage if available
+  let loadedSessions = initialSessions
+  let loadedSessionId = 's1'
+  try {
+    const storedSessions = window.localStorage.getItem('bubbles_ai_sessions')
+    if (storedSessions) {
+      const parsed = JSON.parse(storedSessions)
+      if (parsed && parsed.length > 0) {
+        loadedSessions = parsed
+        // parse back dates
+        loadedSessions.forEach(s => {
+          s.messages.forEach(m => {
+            m.timestamp = new Date(m.timestamp)
+          })
+        })
+      }
+    }
+    const storedCurrentId = window.localStorage.getItem('bubbles_ai_current_session')
+    if (storedCurrentId) {
+      loadedSessionId = storedCurrentId
+    }
+  } catch (e) {
+    console.error('Failed to load AI sessions from localStorage', e)
+  }
+
+  const sessions = ref<ChatSession[]>(loadedSessions)
+  const currentSessionId = ref<string>(loadedSessionId)
   const isThinking = ref<boolean>(false)
+  const activeContextEmails = ref<Email[]>([])
+
+  // Explicit state saving logic
+  const saveState = () => {
+    try {
+      window.localStorage.setItem('bubbles_ai_sessions', JSON.stringify(sessions.value))
+      window.localStorage.setItem('bubbles_ai_current_session', currentSessionId.value)
+    } catch (e) {
+      console.error('Failed to save AI sessions to localStorage', e)
+    }
+  }
 
   const currentSession = computed(() => {
     return sessions.value.find(s => s.id === currentSessionId.value) || sessions.value[0]
@@ -44,50 +83,15 @@ export const useAiStore = defineStore('aiAssistant', () => {
   // Expose messages read-only dynamically computed from active session
   const messages = computed(() => currentSession.value.messages)
 
-  const getSuggestedActions = (email: Email | null) => {
-    if (!email) {
-      return [
-        'How does today look?',
-        'Show my highest priority tasks',
-        'Summarize this week\'s budget discussion'
-      ]
-    }
-    
-    // Context-sensitive prompt chips
-    if (email.subject.includes('Meeting')) {
-      return [
-        'Draft a reply accepting the meeting',
-        'Draft a reply: reschedule to 11:30 AM',
-        'Generate an agenda for this meeting'
-      ]
-    } else if (email.subject.includes('Budget')) {
-      return [
-        'Draft a reply to Emily requesting a sync',
-        'Analyze our QA budget gap',
-        'Add a task: Review QA spreadsheet'
-      ]
-    } else if (email.subject.includes('Funding') || email.subject.includes('Announcement')) {
-      return [
-        'Draft a congratulatory reply to Michael',
-        'Summarize Series A details',
-        'Add all-hands calendar event'
-      ]
-    } else if (email.subject.includes('plans') || email.subject.includes('Weekend')) {
-      return [
-        'Draft a reply: I\'d love to join!',
-        'Draft a reply: Can\'t make it this weekend',
-        'What is the weather forecast?'
-      ]
-    }
-    
+  const getSuggestedActions = () => {
     return [
-      `Draft a quick reply to ${email.sender}`,
-      'Summarize this conversation thread',
-      `Add a follow-up task for ${email.sender}`
+      'How does today look?',
+      'Show my highest priority tasks',
+      'Help me draft a new email'
     ]
   }
 
-  const sendMessage = async (text: string, contextEmail: Email | null = null) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return
     
     const activeSess = sessions.value.find(s => s.id === currentSessionId.value)
@@ -98,7 +102,8 @@ export const useAiStore = defineStore('aiAssistant', () => {
       id: `user_${Date.now()}`,
       sender: 'user',
       text,
-      timestamp: new Date()
+      timestamp: new Date(),
+      contextEmails: activeContextEmails.value.length > 0 ? activeContextEmails.value.map(e => ({ id: e.id, subject: e.subject })) : undefined
     })
     
     // Auto-update session title dynamically based on the first user query
@@ -109,59 +114,85 @@ export const useAiStore = defineStore('aiAssistant', () => {
     }
     
     isThinking.value = true
-    
-    // Simulate AI response delay
-    setTimeout(() => {
-      let replyText = ''
-      const lowerText = text.toLowerCase()
-      
-      if (lowerText.includes('draft') || lowerText.includes('reply')) {
-        const recipient = contextEmail ? contextEmail.sender : 'William Smith'
-        const subject = contextEmail ? contextEmail.subject : 'Re: Meeting Tomorrow'
-        
-        replyText = `Here is a drafted response to **${recipient}**:
-\`\`\`text
-Subject: Re: ${subject.replace(/^Re:\s*/i, '')}
 
-Hi ${recipient.split(' ')[0]},
-
-Thanks for the note. That sounds good to me. I've reviewed the details and look forward to discussing the next steps. I'll make sure to bring my notes on our recent milestones and proposed adjustments.
-
-See you then!
-
-Best,
-Alicia
-\`\`\`
-
-Would you like me to copy this to your clipboard or send it directly?`
-      } else if (lowerText.includes('budget') || lowerText.includes('qa')) {
-        replyText = `Based on Emily Davis's email, the QA team resource allocation was reduced by **15%** in the current draft. This was redirected towards core developer infrastructure improvements. 
-
-Emily suggests this reduction could create post-launch desktop app regressions. I've added a task to **"Review QA team budget spreadsheet"** to your checklist.`
-      } else if (lowerText.includes('agenda') || lowerText.includes('meeting')) {
-        replyText = `Here is a suggested meeting agenda based on the engineering items William Smith shared:
-1. **API Models Review (20 mins)**: Walkthrough of technical specs and client-side Tauri integrations.
-2. **Sprint & Milestone Progress (15 mins)**: Discussion on resource constraints and pending hires.
-3. **Client Design Feedback (10 mins)**: Core UX iterations.
-4. **Action Steps & Deadlines (15 mins)**: Next steps and next release tags.`
-      } else if (lowerText.includes('task') || lowerText.includes('add')) {
-        replyText = `Done! I've added the new action item directly to your Daily Intelligence checklist. Is there anything else you need me to log?`
-      } else {
-        replyText = `I've analyzed that request against today's context.
-
-Since we secured **Series A funding** and have a **Technical Alignment sync** tomorrow, I recommend prioritizing William's API preparation and reviewing Emily's budget sheet.
-
-I'm ready to help you write drafts or search details on these threads!`
-      }
-      
-      activeSess.messages.push({
-        id: `ai_${Date.now()}`,
-        sender: 'ai',
-        text: replyText,
-        timestamp: new Date()
+    // System context without auto-injected emails, unless EXPLICITLY set by user
+    let systemContext = 'You are Bubbles AI, a helpful, concise, and professional email assistant.'
+    if (activeContextEmails.value.length > 0) {
+      systemContext += `\n\nThe user has explicitly asked you about the following emails:\n`
+      activeContextEmails.value.forEach((email, index) => {
+        systemContext += `\n--- Email ${index + 1} ---\nFrom: ${email.sender} <${email.senderEmail}>\nSubject: ${email.subject}\nBody: ${email.body}\n`
       })
+    }
+
+    // Build conversation history for the model
+    const conversationHistory = activeSess.messages
+      .filter(m => m.sender === 'user' || m.sender === 'ai')
+      .slice(-10) // last 10 messages for context
+      .map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+      .join('\n\n')
+
+    // Add a placeholder AI message that we'll stream into
+    const aiMsgId = `ai_${Date.now()}`
+    activeSess.messages.push({
+      id: aiMsgId,
+      sender: 'ai',
+      text: '',
+      timestamp: new Date()
+    })
+
+    const { settings } = useSettings()
+    const modelName = settings.value.ollamaModel
+
+    if (!modelName) {
+      const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
+      if (aiMsg) aiMsg.text = '⚠️ No AI model selected. Please go to **Settings > AI** and select an Ollama model.'
       isThinking.value = false
-    }, 1200)
+      saveState()
+      return
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        window.electronAPI.streamApi(
+          '/api/ai/chat',
+          {
+            headers: { 'x-ai-model': modelName },
+            body: {
+              prompt: text,
+              system: systemContext,
+              history: conversationHistory
+            }
+          },
+          {
+            onChunk: (chunk: string) => {
+              isThinking.value = false
+              const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
+              if (aiMsg) {
+                aiMsg.text += chunk
+                // Throttle saving chunks to prevent IO bottleneck, save on finish anyway
+              }
+            },
+            onFinish: () => {
+              isThinking.value = false
+              saveState()
+              resolve()
+            },
+            onError: (err: any) => {
+              const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
+              if (aiMsg) aiMsg.text = `⚠️ Error: ${err}`
+              isThinking.value = false
+              saveState()
+              reject(err)
+            }
+          }
+        )
+      })
+    } catch {
+      isThinking.value = false
+      saveState()
+    } finally {
+      activeContextEmails.value = [] // clear contexts after sending
+    }
   }
 
   const createNewSession = () => {
@@ -179,6 +210,7 @@ I'm ready to help you write drafts or search details on these threads!`
       ]
     })
     currentSessionId.value = newId
+    saveState()
   }
 
   const deleteSession = (sessionId: string) => {
@@ -192,6 +224,7 @@ I'm ready to help you write drafts or search details on these threads!`
       if (currentSessionId.value === sessionId) {
         currentSessionId.value = sessions.value[0].id
       }
+      saveState()
     }
   }
 
@@ -207,6 +240,7 @@ I'm ready to help you write drafts or search details on these threads!`
           timestamp: new Date()
         }
       ]
+      saveState()
     }
   }
 
@@ -215,6 +249,7 @@ I'm ready to help you write drafts or search details on these threads!`
     currentSessionId,
     messages,
     isThinking,
+    activeContextEmails,
     getSuggestedActions,
     sendMessage,
     createNewSession,
@@ -225,9 +260,9 @@ I'm ready to help you write drafts or search details on these threads!`
 
 export function useAiAssistant() {
   const store = useAiStore()
-  const { sessions, currentSessionId, messages, isThinking } = storeToRefs(store)
+  const { sessions, currentSessionId, messages, isThinking, activeContextEmails } = storeToRefs(store)
   return {
-    sessions, currentSessionId, messages, isThinking,
+    sessions, currentSessionId, messages, isThinking, activeContextEmails,
     getSuggestedActions: store.getSuggestedActions,
     sendMessage: store.sendMessage,
     createNewSession: store.createNewSession,

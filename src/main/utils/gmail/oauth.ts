@@ -12,7 +12,7 @@ export const GMAIL_SCOPES = [
 export function getGoogleOAuthConfig() {
   const clientId = process.env.NUXT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
   const clientSecret = process.env.NUXT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
-  const redirectUri = process.env.NUXT_GOOGLE_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/gmail/callback'
+  const redirectUri = process.env.NUXT_GOOGLE_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:9944/api/gmail/callback'
 
   if (!clientId || !clientSecret) {
     throw new Error('Missing Google OAuth credentials. Set NUXT_GOOGLE_CLIENT_ID and NUXT_GOOGLE_CLIENT_SECRET.')

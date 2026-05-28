@@ -1,46 +1,48 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Key, EyeOff, Eye, Check, AlertCircle } from '@lucide/vue'
+import { Key, EyeOff, Eye, Check, AlertCircle, Mic } from '@lucide/vue'
 
 const props = defineProps<{
   apiKey: string
+  sarvamApiKey: string
 }>()
 
-const emit = defineEmits(['update:apiKey'])
+const emit = defineEmits(['update:apiKey', 'update:sarvamApiKey'])
 
 const showApiKey = ref(false)
+const showSarvamApiKey = ref(false)
 </script>
 
 <template>
   <div class="settings-section animate-fade-in">
     <h3 class="section-label">Privacy & Access Controls</h3>
 
-    <!-- API Key set card -->
+    <!-- Sarvam API Key card -->
     <div class="api-key-card">
       <div class="api-key-header">
         <div class="api-key-icon-wrapper flex-center">
-          <Key :size="15" />
+          <Mic :size="15" />
         </div>
         <div>
-          <h4 class="setting-title">Bubbles API Access Token</h4>
-          <p class="setting-subtitle">Set your secure developer token to authorize background AI agents to compile data checklists.</p>
+          <h4 class="setting-title">Sarvam AI Subscription Key</h4>
+          <p class="setting-subtitle">Used for fast, streaming voice dictation. Leave empty to fallback to system environment variables.</p>
         </div>
       </div>
 
       <div class="api-input-wrapper">
         <input 
-          :type="showApiKey ? 'text' : 'password'" 
-          :value="apiKey"
-          @input="emit('update:apiKey', ($event.target as HTMLInputElement).value)"
+          :type="showSarvamApiKey ? 'text' : 'password'" 
+          :value="sarvamApiKey"
+          @input="emit('update:sarvamApiKey', ($event.target as HTMLInputElement).value)"
           class="api-key-input"
-          placeholder="Enter your bb-live-... key"
+          placeholder="Enter your Sarvam subscription key"
         />
         <button 
           type="button" 
           class="api-toggle-visibility-btn flex-center"
-          @click="showApiKey = !showApiKey"
+          @click="showSarvamApiKey = !showSarvamApiKey"
         >
-          <EyeOff v-if="showApiKey" :size="14" />
+          <EyeOff v-if="showSarvamApiKey" :size="14" />
           <Eye v-else :size="14" />
         </button>
       </div>

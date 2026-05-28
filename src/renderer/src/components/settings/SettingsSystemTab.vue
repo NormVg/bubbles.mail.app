@@ -13,18 +13,6 @@ const emit = defineEmits(['update:syncInterval', 'toggleTheme'])
   <div class="settings-section animate-fade-in">
     <h3 class="section-label">System Preferences</h3>
 
-    <!-- Theme Select Switch inside Settings Detail -->
-    <div class="setting-row-card">
-      <div class="setting-card-left">
-        <h4 class="setting-title">Dark Theme</h4>
-        <p class="setting-subtitle">Toggle Bubbles' monochrome architectural interface between light and dark modes.</p>
-      </div>
-      <label class="switch">
-        <input type="checkbox" :checked="isDarkTheme" @change="emit('toggleTheme')" />
-        <span class="slider"></span>
-      </label>
-    </div>
-
     <!-- Sync Timer Selection slider -->
     <div class="system-sync-card">
       <div class="sync-slider-header">

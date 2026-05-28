@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import {
   Check,
   ChevronDown,
@@ -14,6 +14,8 @@ import {
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { appApiFetch } from '../composables/useAppApi'
+import { useCompletion } from '@ai-sdk/vue'
+import { useSettings } from '../composables/useSettings'
 import { storeToRefs } from 'pinia'
 import { useComposeStore, type SavedDraft } from '../stores/useComposeStore'
 import AiDraftPanel from './common/AiDraftPanel.vue'
@@ -22,6 +24,7 @@ import ComposeToolbar from './compose/ComposeToolbar.vue'
 
 const { setViewMode } = useMail()
 const composeStore = useComposeStore()
+const { settings } = useSettings()
 
 const {
   showDraftsDropdown,
@@ -202,73 +205,114 @@ function loadDraft(draft: SavedDraft) {
   nextTick(() => autosizeTextarea(bodyTextareaRef.value, 520))
 }
 
-function startVoiceInput() {
+let mediaRecorder: MediaRecorder | null = null
+let audioChunks: Blob[] = []
+
+async function startVoiceInput() {
   if (aiDraftState.value === 'generating') return
   aiDraftState.value = 'dictating'
+  aiPrompt.value = ''
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder = new MediaRecorder(stream)
+    audioChunks = []
+
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) audioChunks.push(e.data)
+    }
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+      const reader = new FileReader()
+      reader.readAsDataURL(audioBlob)
+      reader.onloadend = async () => {
+        const base64Data = (reader.result as string).split(',')[1]
+        try {
+          const res = await appApiFetch<{text: string}>('/api/ai/transcribe', {
+            method: 'POST',
+            body: { 
+              audioBase64: base64Data,
+              apiKey: settings.value.sarvamApiKey
+            }
+          })
+          aiPrompt.value = res.text || 'Transcription failed.'
+        } catch (e) {
+          console.error('Transcription failed', e)
+        } finally {
+          aiDraftState.value = 'empty'
+          stream.getTracks().forEach(track => track.stop())
+        }
+      }
+    }
+
+    mediaRecorder.start()
+  } catch (err) {
+    console.error('Error accessing microphone:', err)
+    aiDraftState.value = 'empty'
+  }
 }
 
 function stopVoiceInput() {
-  aiDraftState.value = 'empty'
-  aiPrompt.value = aiPrompt.value.trim()
-    ? aiPrompt.value
-    : 'Draft a clear, warm email that confirms next steps and asks for a quick sync.'
-  nextTick(() => autosizeTextarea(aiPromptRef.value, 160))
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop()
+  } else {
+    aiDraftState.value = 'empty'
+  }
 }
 
-function senderName() {
-  return visibleFromAccount.value.split('@')[0] || 'Me'
+const ipcStreamFetch = (url: string, options: RequestInit): Promise<Response> => {
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+
+  window.electronAPI.streamApi(
+    url,
+    { headers: options.headers, body: JSON.parse(options.body as string) },
+    {
+      onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
+      onFinish: () => writer.close(),
+      onError: (err: any) => writer.abort(err)
+    }
+  )
+
+  return Promise.resolve(new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  }))
 }
 
-function buildAiDraft() {
-  const prompt = aiPrompt.value.trim()
-  const recipient = toChips.value[0]?.email.split('@')[0] || 'there'
-  const name = senderName()
-  const attachmentLine = aiAttachedFiles.value.length
-    ? `\n\nI have included ${aiAttachedFiles.value.length === 1 ? 'the attached file' : 'the attached files'} for context.`
-    : ''
-
-  if (!prompt) {
-    return `Subject: Quick update\n\nHi ${recipient},\n\nI hope this message finds you well. I wanted to reach out regarding our current priorities and make sure we are aligned on next steps.${attachmentLine}\n\nPlease let me know when you are available for a quick sync.\n\nBest regards,\n${name}`
+const { completion: aiCompletion, complete: completeAiDraft } = useCompletion({
+  api: '/api/ai/draft',
+  fetch: ipcStreamFetch,
+  onFinish: () => {
+    aiDraftState.value = 'drafted'
+    nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
+  },
+  onError: (err) => {
+    console.error('Draft generation error:', err)
+    aiDraftState.value = 'empty'
   }
+})
 
-  if (/decline|invite|invitation/i.test(prompt)) {
-    return `Subject: Re: Invitation\n\nHi ${recipient},\n\nThank you for the invitation. I appreciate you thinking of me, but I will need to politely decline this time due to current production milestones.${attachmentLine}\n\nPlease keep me in mind for future opportunities.\n\nBest regards,\n${name}`
-  }
-
-  if (/follow|proposal|partnership/i.test(prompt)) {
-    return `Subject: Following up on the proposal\n\nHi ${recipient},\n\nI wanted to follow up on the proposal and see whether you had a chance to review the details. We are finalizing the next planning cycle and your feedback would be helpful.${attachmentLine}\n\nHappy to schedule a quick call this week if easier.\n\nBest,\n${name}`
-  }
-
-  if (/sync|qa|review|meeting/i.test(prompt)) {
-    return `Subject: Technical alignment sync\n\nHi ${recipient},\n\nI would like to schedule a short alignment sync to review the current QA milestones, product priorities, and any blockers before the next release window.${attachmentLine}\n\nWould 10:00 AM or 2:00 PM work for you?\n\nBest,\n${name}`
-  }
-
-  return `Subject: ${prompt.slice(0, 48)}${prompt.length > 48 ? '...' : ''}\n\nHi ${recipient},\n\nI hope you are doing well. I am writing regarding "${prompt}".${attachmentLine}\n\nPlease let me know what timing works best for you, and I can coordinate from there.\n\nBest regards,\n${name}`
-}
-
-function generateAiDraft() {
-  if (aiDraftState.value === 'generating') return
-
-  aiDraftState.value = 'generating'
-  aiDraft.value = ''
-  const target = buildAiDraft()
-  let index = 0
-
-  const interval = window.setInterval(() => {
-    const chunk = target.slice(index, index + 4)
-    aiDraft.value += chunk
-    index += chunk.length
+watch(aiCompletion, (newVal) => {
+  if (aiDraftState.value === 'generating') {
+    aiDraft.value = newVal
     nextTick(() => {
       autosizeTextarea(aiDraftRef.value, 380)
       if (aiDraftRef.value) aiDraftRef.value.scrollTop = aiDraftRef.value.scrollHeight
     })
+  }
+})
 
-    if (index >= target.length) {
-      window.clearInterval(interval)
-      aiDraftState.value = 'drafted'
-      nextTick(() => autosizeTextarea(aiDraftRef.value, 380))
+async function generateAiDraft() {
+  if (aiDraftState.value === 'generating') return
+  aiDraftState.value = 'generating'
+  aiDraft.value = ''
+  
+  await completeAiDraft(aiPrompt.value, {
+    headers: {
+      'x-ai-model': settings.value.ollamaModel
     }
-  }, 12)
+  })
 }
 
 function discardAiDraft() {

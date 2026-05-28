@@ -34,6 +34,11 @@ import { listGmailAccounts, deleteGmailAccount } from './utils/gmail/repository'
 import { createGmailAuthUrl } from './utils/gmail/oauth'
 import { connectGmailAccountFromCallback, listCachedMessages, sendGmailMessage, syncGmailMessages, readGmailMessage, applyGmailMessageAction } from './utils/gmail/service'
 
+import { ollama } from 'ai-sdk-ollama'
+import { streamText } from 'ai'
+import { SarvamAIClient } from 'sarvamai'
+import { Readable } from 'stream'
+
 // We initialize SQLite database on app load
 getSqliteConnection()
 
@@ -174,6 +179,8 @@ function startOAuthCallbackServer() {
       return
     }
 
+
+
     res.writeHead(404)
     res.end()
   })
@@ -181,12 +188,12 @@ function startOAuthCallbackServer() {
   server.on('error', (err: any) => {
     console.error('[Electron] OAuth callback server error:', err.message)
     if (err.code === 'EADDRINUSE') {
-      console.warn('[Electron] Port 3000 is already in use by another process. OAuth callback might not work. Please free port 3000.')
+      console.warn('[Electron] Port 9944 is already in use by another process. OAuth callback might not work. Please free port 9944.')
     }
   })
 
-  server.listen(3000, 'localhost', () => {
-    console.log('[Electron] OAuth callback server listening on http://localhost:3000')
+  server.listen(9944, 'localhost', () => {
+    console.log('[Electron] OAuth callback server listening on http://localhost:9944')
   })
 
   app.on('before-quit', () => {
@@ -258,6 +265,58 @@ app.whenReady().then(async () => {
       const method = options.method || 'GET'
       
       console.log(`[Electron IPC] API Router: ${method} ${path}`)
+
+      // AI Transcribe POST /api/ai/transcribe
+      if (cleanPath === '/api/ai/transcribe' && method === 'POST') {
+        const body = options.body || {}
+        if (!body.audioBase64) throw new Error('Missing audioBase64')
+        const apiKey = body.apiKey || process.env.SARVAM_API_KEY || "YOUR_SARVAM_API_KEY"
+        
+        console.log(`[Sarvam] Starting transcription using key: ${apiKey.substring(0, 5)}...`)
+        
+        const client = new SarvamAIClient({
+          apiSubscriptionKey: apiKey
+        })
+        
+        try {
+          const fs = require('fs')
+          const path = require('path')
+          const os = require('os')
+          
+          const tempFilePath = path.join(os.tmpdir(), `dictation_${Date.now()}.webm`)
+          fs.writeFileSync(tempFilePath, Buffer.from(body.audioBase64, 'base64'))
+          console.log(`[Sarvam] Saved temp audio file to ${tempFilePath}`)
+          
+          const response = await client.speechToText.transcribe({
+            file: fs.createReadStream(tempFilePath),
+            language_code: "en-IN",
+            model: "saaras:v3"
+          } as any)
+          
+          fs.unlinkSync(tempFilePath)
+          console.log(`[Sarvam] Transcription successful:`, response)
+          
+          return { text: response.transcript || (response as any).text || '' }
+        } catch (error: any) {
+          console.error(`[Sarvam] Transcription error:`, error)
+          throw error
+        }
+      }
+
+      // AI Models GET /api/ai/models
+      if (cleanPath === '/api/ai/models' && method === 'GET') {
+        try {
+          const res = await fetch('http://localhost:11434/api/tags')
+          if (!res.ok) {
+            throw new Error(`Ollama returned status ${res.status}`)
+          }
+          const data = (await res.json()) as any
+          return data.models?.map((m: any) => ({ name: m.name, size: m.size })) || []
+        } catch (err: any) {
+          console.warn('[Electron IPC] Failed to fetch Ollama models:', err.message)
+          return []
+        }
+      }
 
       // 1. GET /api/gmail/accounts
       if (cleanPath === '/api/gmail/accounts' && method === 'GET') {
@@ -430,6 +489,73 @@ app.whenReady().then(async () => {
     } catch (err: any) {
       console.error(`[Electron IPC Error] Route failed for ${path}:`, err)
       throw new Error(err.message || 'Internal main process error')
+    }
+  })
+
+  // AI Stream tracking for AbortController
+  const activeStreams = new Map<string, AbortController>()
+
+  ipcMain.on('api-stream-start', async (event, { streamId, path, options }) => {
+    const controller = new AbortController()
+    activeStreams.set(streamId, controller)
+
+    try {
+      let result;
+      const modelName = options.headers?.['x-ai-model'] || options.body?.model
+      if (!modelName) {
+        throw new Error('No AI model selected. Please select a model in Settings > AI.')
+      }
+      const parsedBody = options.body || {}
+      
+      if (path === '/api/ai/draft') {
+        result = await streamText({
+          model: ollama(modelName),
+          system: 'You are an expert email drafting assistant. Draft professional, concise, and highly effective emails. Output the email subject on the first line prefixed with "Subject:", then a blank line, then the email body. Do not output any other conversational filler.',
+          prompt: parsedBody.prompt,
+          abortSignal: controller.signal
+        })
+      } else if (path === '/api/ai/reply') {
+        result = await streamText({
+          model: ollama(modelName),
+          system: 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
+          prompt: `Context:\n${parsedBody.context}\n\nInstructions:\n${parsedBody.prompt}`,
+          abortSignal: controller.signal
+        })
+      } else if (path === '/api/ai/chat') {
+        const fullPrompt = parsedBody.history 
+          ? `${parsedBody.history}\n\nUser: ${parsedBody.prompt}`
+          : parsedBody.prompt
+        result = await streamText({
+          model: ollama(modelName),
+          system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
+          prompt: fullPrompt,
+          abortSignal: controller.signal
+        })
+      } else {
+        throw new Error('Unknown streaming path')
+      }
+
+      for await (const chunk of result.textStream) {
+        if (controller.signal.aborted) break
+        event.sender.send(`stream-chunk-${streamId}`, chunk)
+      }
+      
+      if (!controller.signal.aborted) {
+        event.sender.send(`stream-finish-${streamId}`)
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        event.sender.send(`stream-error-${streamId}`, err.message)
+      }
+    } finally {
+      activeStreams.delete(streamId)
+    }
+  })
+
+  ipcMain.on('api-stream-abort', (event, streamId) => {
+    if (activeStreams.has(streamId)) {
+      activeStreams.get(streamId)?.abort()
+      activeStreams.delete(streamId)
     }
   })
 

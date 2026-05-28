@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Archive, Trash2, Reply, ReplyAll, Forward } from '@lucide/vue'
+import { Archive, Trash2, Reply, ReplyAll, Forward, Sparkles } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import { useAiAssistant } from '../composables/useAiAssistant'
 
@@ -11,8 +11,19 @@ const {
   sessions, 
   currentSessionId, 
   createNewSession, 
-  deleteSession
+  deleteSession,
+  activeContextEmails
 } = useAiAssistant()
+
+function handleAskAi() {
+  if (selectedEmail.value) {
+    const exists = activeContextEmails.value.find(e => e.id === selectedEmail.value!.id)
+    if (!exists) {
+      activeContextEmails.value.push(selectedEmail.value)
+    }
+    viewMode.value = 'chat'
+  }
+}
 
 function handleArchive() {
   if (selectedEmail.value) {
@@ -71,6 +82,10 @@ function handleForward() {
         <!-- Toolbar -->
         <div class="pane-header toolbar">
           <div class="toolbar-group">
+            <button class="tool-btn ai-btn" title="Ask AI about this email" @click="handleAskAi">
+              <Sparkles :size="16" />
+            </button>
+            <div class="toolbar-divider"></div>
             <button class="tool-btn" title="Archive" @click="handleArchive">
               <Archive :size="16" />
             </button>

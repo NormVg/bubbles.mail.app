@@ -1,31 +1,44 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
-import { Sparkles } from '@lucide/vue'
-import { useMail } from '../composables/useMail'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { Sparkles, X, Copy, Check } from '@lucide/vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
+import { useMail } from '../composables/useMail'
 import AiInputBox from './common/AiInputBox.vue'
 import { useDictation } from '../composables/useDictation'
-import type { AttachedFile } from './common/AiInputBox.vue'
+import { Markdown } from 'vue-stream-markdown'
+import 'vue-stream-markdown/index.css'
+import 'vue-stream-markdown/theme.css'
 
-defineProps<{
-  isFreshSession?: boolean
-}>()
+const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails } = useAiAssistant()
+const { viewMode, selectedEmailId } = useMail()
 
-const { selectedEmail } = useMail()
-const { messages, isThinking, getSuggestedActions, sendMessage } = useAiAssistant()
+const isFreshSession = computed(() => messages.value.length <= 1)
 
 const inputMessage = ref('')
 const messageContainer = ref<HTMLElement | null>(null)
 const attachedFiles = ref<AttachedFile[]>([])
+const copiedMessageId = ref<string | null>(null)
 
-const { isRecording, startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
-  if (selectedEmail.value) {
-    const sender = selectedEmail.value.sender.split(' ')[0]
-    inputMessage.value = `Can you draft a short, formal response to ${sender} accepting the timeline but suggesting we meet on Google Meet instead of B?`
-  } else {
-    inputMessage.value = result
-  }
+const { isRecording, isTranscribing, audioLevel, startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
+  inputMessage.value = result
 })
+
+function goToEmail(id: string) {
+  selectedEmailId.value = id
+  viewMode.value = 'inbox'
+}
+
+async function copyToClipboard(text: string, msgId: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    copiedMessageId.value = msgId
+    setTimeout(() => {
+      copiedMessageId.value = null
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy text', err)
+  }
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -46,24 +59,24 @@ function handleSend() {
     formattedText = `${prefix}📎 Attached files: ${fileNames}`
   }
   
-  sendMessage(formattedText, selectedEmail.value)
+  sendMessage(formattedText, null)
   inputMessage.value = ''
   attachedFiles.value = []
   scrollToBottom()
 }
 
 function selectSuggestion(suggestion: string) {
-  sendMessage(suggestion, selectedEmail.value)
+  sendMessage(suggestion, null)
   scrollToBottom()
 }
 
-function formatMessageText(text: string) {
-  return text
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/```text<br>([\s\S]*?)```/g, '<div class="draft-block"><pre>$1</pre></div>')
-    .replace(/```text([\s\S]*?)```/g, '<div class="draft-block"><pre>$1</pre></div>')
+function formatUserText(text: string) {
+  return text.replace(/\n/g, '<br>')
 }
+
+watch(messages, () => {
+  scrollToBottom()
+}, { deep: true })
 
 onMounted(() => {
   scrollToBottom()
@@ -89,16 +102,32 @@ onMounted(() => {
         :key="msg.id" 
         class="message-wrapper"
         :class="msg.sender"
+        v-show="msg.sender === 'user' || msg.text"
       >
         <div v-if="msg.sender === 'ai'" class="ai-response">
           <div class="ai-msg-header">
             <span class="ai-icon flex-center"><Sparkles :size="12" /></span>
           </div>
-          <div class="ai-msg-body" v-html="formatMessageText(msg.text)"></div>
+          <div class="ai-msg-body">
+            <Markdown :content="msg.text" />
+          </div>
+          <div class="ai-msg-footer">
+            <div class="ai-msg-actions">
+              <button class="msg-action-btn" @click="copyToClipboard(msg.text, msg.id)" title="Copy message">
+                <Check v-if="copiedMessageId === msg.id" :size="12" class="success-icon" />
+                <Copy v-else :size="12" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div v-else class="user-msg">
-          <div class="user-msg-text" v-html="formatMessageText(msg.text)"></div>
+          <div v-if="msg.contextEmails && msg.contextEmails.length > 0" class="user-msg-context-group">
+            <div v-for="email in msg.contextEmails" :key="email.id" class="user-msg-context clickable" @click="goToEmail(email.id)" title="View this email">
+              <span class="context-label">Context:</span> {{ email.subject }}
+            </div>
+          </div>
+          <div class="user-msg-text" v-html="formatUserText(msg.text)"></div>
         </div>
       </div>
       
@@ -118,10 +147,10 @@ onMounted(() => {
 
     <div class="chat-bottom-section">
       <!-- Suggestion chips -->
-      <div class="suggestions-bar" :class="{ 'hide-suggestions': !isFreshSession && !isThinking && false }">
-        <div class="suggestions-scroll" v-if="!isThinking">
+      <div v-if="isFreshSession && !isThinking" class="suggestions-bar">
+        <div class="suggestions-scroll">
           <button 
-            v-for="chip in getSuggestedActions(selectedEmail)" 
+            v-for="chip in getSuggestedActions()" 
             :key="chip" 
             class="suggestion-chip"
             @click="selectSuggestion(chip)"
@@ -132,13 +161,26 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Active Context Chips -->
+      <div v-if="activeContextEmails.length > 0" class="context-chip-wrapper">
+        <div v-for="(email, idx) in activeContextEmails" :key="email.id" class="context-chip">
+          <span class="context-label">Context:</span>
+          <span class="context-subject">{{ email.subject }}</span>
+          <button class="context-clear-btn flex-center" @click="activeContextEmails.splice(idx, 1)">
+            <X :size="10" />
+          </button>
+        </div>
+      </div>
+
       <!-- Input Box -->
       <div class="chat-input-area">
         <AiInputBox
           v-model="inputMessage"
           v-model:attachedFiles="attachedFiles"
           :isRecording="isRecording"
-          :disabled="isThinking"
+          :isTranscribing="isTranscribing"
+          :audioLevel="audioLevel"
+          :disabled="isThinking || isTranscribing"
           @send="handleSend"
           @startDictation="startVoiceDictation"
           @stopDictation="stopVoiceDictation"
@@ -276,17 +318,55 @@ onMounted(() => {
 .ai-msg-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  width: 100%;
 }
 
 .ai-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.ai-msg-footer {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.ai-msg-actions {
+  display: flex;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ai-response:hover .ai-msg-actions {
+  opacity: 1;
+}
+
+.msg-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.msg-action-btn:hover {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.success-icon {
+  color: hsl(142, 70%, 45%);
 }
 
 .ai-msg-body {
@@ -349,13 +429,11 @@ onMounted(() => {
 }
 
 .suggestions-bar {
-  padding: 4px 16px 8px;
+  padding: 4px 20px 12px;
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: none;
   width: 100%;
-  min-height: 38px;
-  transition: all 0.3s ease;
 }
 
 .suggestions-bar::-webkit-scrollbar {
@@ -365,6 +443,7 @@ onMounted(() => {
 .suggestions-scroll {
   display: flex;
   gap: 8px;
+  justify-content: center;
 }
 
 .suggestion-chip {
@@ -396,5 +475,121 @@ onMounted(() => {
   padding: 10px 20px 20px;
   flex-shrink: 0;
   width: 100%;
+}
+.context-chip-wrapper {
+  padding: 0 20px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.context-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-family: var(--font-sans);
+  max-width: 100%;
+}
+
+.context-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+}
+
+.context-subject {
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.context-clear-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 50%;
+  margin-left: 2px;
+  transition: all var(--transition-fast);
+}
+
+.context-clear-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .context-clear-btn {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme='dark'] .context-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.user-msg-context-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.user-msg-context {
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  transition: all var(--transition-fast);
+}
+
+.user-msg-context.clickable {
+  cursor: pointer;
+}
+.user-msg-context.clickable:hover {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+.user-msg-context .context-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  margin-right: 4px;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+[data-theme='light'] .user-msg-context {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+[data-theme='light'] .user-msg-context.clickable:hover {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+[data-theme='light'] .user-msg-context .context-label {
+  color: var(--text-muted);
 }
 </style>

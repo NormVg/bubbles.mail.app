@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { FileText, X, Paperclip, Mic, CornerUpRight } from '@lucide/vue'
+import { FileText, X, Paperclip, Mic, CornerUpRight, Loader2 } from '@lucide/vue'
 
 export interface AttachedFile {
   name: string
@@ -14,11 +14,15 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   attachedFiles?: AttachedFile[]
   isRecording?: boolean
+  isTranscribing?: boolean
+  audioLevel?: number
 }>(), {
   placeholder: "Dump your mind, let me manage",
   disabled: false,
   attachedFiles: () => [],
-  isRecording: false
+  isRecording: false,
+  isTranscribing: false,
+  audioLevel: 0
 })
 
 const emit = defineEmits<{
@@ -84,7 +88,7 @@ function handleSend() {
 </script>
 
 <template>
-  <div class="double-box-outer" :class="{ 'is-recording': isRecording }">
+  <div class="double-box-outer" :class="{ 'is-recording': isRecording || isTranscribing }">
     <input
       ref="fileInputRef"
       type="file"
@@ -105,7 +109,7 @@ function handleSend() {
       </div>
 
       <textarea
-        v-if="!isRecording"
+        v-if="!isRecording && !isTranscribing"
         ref="chatTextareaRef"
         :value="modelValue"
         @input="e => { emit('update:modelValue', (e.target as HTMLTextAreaElement).value); adjustTextareaHeight(); }"
@@ -116,16 +120,20 @@ function handleSend() {
         @keydown.enter.prevent="handleSend"
       />
 
-      <div v-else class="dictating-pulse-row animate-fade-in">
+      <div v-else-if="isRecording" class="dictating-pulse-row animate-fade-in">
         <span class="recording-pulsing-dot"></span>
         <span class="dictating-status-text">Listening... Speak now</span>
         <div class="mini-voice-wave flex-center">
-          <span class="wave-pillar p1"></span>
-          <span class="wave-pillar p2"></span>
-          <span class="wave-pillar p3"></span>
-          <span class="wave-pillar p4"></span>
+          <span class="wave-pillar" :style="{ transform: `scaleY(${Math.max(0.2, audioLevel * 0.7 + 0.1)})` }"></span>
+          <span class="wave-pillar" :style="{ transform: `scaleY(${Math.max(0.3, audioLevel * 1.5 + 0.2)})` }"></span>
+          <span class="wave-pillar" :style="{ transform: `scaleY(${Math.max(0.25, audioLevel * 1.1 + 0.15)})` }"></span>
+          <span class="wave-pillar" :style="{ transform: `scaleY(${Math.max(0.15, audioLevel * 0.5 + 0.1)})` }"></span>
         </div>
-        <button type="button" class="stop-dictate-btn" @click="emit('stopDictation')">Stop</button>
+      </div>
+
+      <div v-else-if="isTranscribing" class="dictating-pulse-row animate-fade-in transcribing-state">
+        <Loader2 :size="16" class="spin-icon" />
+        <span class="dictating-status-text">Transcribing your voice...</span>
       </div>
 
       <div class="card-toolbar-row">
@@ -134,6 +142,7 @@ function handleSend() {
             <Paperclip :size="15" />
           </button>
           <button
+            v-if="!isTranscribing"
             type="button"
             class="toolbar-icon-btn flex-center"
             :class="{ 'recording-active': isRecording }"
@@ -345,13 +354,10 @@ function handleSend() {
   width: 3px;
   background-color: #ef4444;
   border-radius: 2px;
-  animation: moveWave 1s ease-in-out infinite alternate;
+  height: 14px;
+  transition: transform 0.05s linear;
+  transform-origin: center;
 }
-
-.wave-pillar.p1 { height: 8px; animation-delay: 0s; }
-.wave-pillar.p2 { height: 16px; animation-delay: 0.2s; }
-.wave-pillar.p3 { height: 12px; animation-delay: 0.4s; }
-.wave-pillar.p4 { height: 6px; animation-delay: 0.6s; }
 
 .stop-dictate-btn {
   background-color: #ef4444;
@@ -376,11 +382,6 @@ function handleSend() {
   100% { background-color: #fee2e2; }
 }
 
-@keyframes moveWave {
-  from { transform: scaleY(0.6); }
-  to { transform: scaleY(1.3); }
-}
-
 .animate-fade-in {
   animation: fadeIn 0.25s ease;
 }
@@ -394,5 +395,23 @@ function handleSend() {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.transcribing-state {
+  color: var(--text-primary);
+}
+
+.transcribing-state .dictating-status-text {
+  color: var(--text-primary);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>

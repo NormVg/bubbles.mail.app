@@ -14,7 +14,9 @@ const props = defineProps({
   }
 })
 
-const { settings, updateSettings } = useSettings()
+const { settings } = useSettings()
+
+import { computed } from 'vue'
 
 const isDarkTheme = ref(false)
 if (typeof document !== 'undefined') {
@@ -28,14 +30,43 @@ function toggleLocalTheme() {
   }
 }
 
-// Temporary form states
-const autoGenerateSummary = ref(settings.value.autoGenerateSummary)
-const autoDraftReplies = ref(settings.value.autoDraftReplies)
-const enableVoiceDictation = ref(settings.value.enableVoiceDictation)
-const agentPersonality = ref<PersonalityTone>(settings.value.agentPersonality)
-const customInstructions = ref(settings.value.customInstructions)
-const syncInterval = ref(settings.value.syncInterval)
-const apiKey = ref(settings.value.apiKey)
+// Compute form states to map directly to settings object
+const autoGenerateSummary = computed({
+  get: () => settings.value.autoGenerateSummary,
+  set: (val) => settings.value.autoGenerateSummary = val
+})
+const autoDraftReplies = computed({
+  get: () => settings.value.autoDraftReplies,
+  set: (val) => settings.value.autoDraftReplies = val
+})
+const enableVoiceDictation = computed({
+  get: () => settings.value.enableVoiceDictation,
+  set: (val) => settings.value.enableVoiceDictation = val
+})
+const agentPersonality = computed({
+  get: () => settings.value.agentPersonality,
+  set: (val) => settings.value.agentPersonality = val
+})
+const customInstructions = computed({
+  get: () => settings.value.customInstructions,
+  set: (val) => settings.value.customInstructions = val
+})
+const syncInterval = computed({
+  get: () => settings.value.syncInterval,
+  set: (val) => settings.value.syncInterval = val
+})
+const apiKey = computed({
+  get: () => settings.value.apiKey,
+  set: (val) => settings.value.apiKey = val
+})
+const ollamaModel = computed({
+  get: () => settings.value.ollamaModel,
+  set: (val) => settings.value.ollamaModel = val
+})
+const sarvamApiKey = computed({
+  get: () => settings.value.sarvamApiKey,
+  set: (val) => settings.value.sarvamApiKey = val
+})
 
 // Button save indicators
 const isSaving = ref(false)
@@ -46,15 +77,6 @@ function saveAllSettings() {
   
   // Simulate premium architectural sync delay
   setTimeout(() => {
-    updateSettings({
-      autoGenerateSummary: autoGenerateSummary.value,
-      autoDraftReplies: autoDraftReplies.value,
-      enableVoiceDictation: enableVoiceDictation.value,
-      agentPersonality: agentPersonality.value,
-      customInstructions: customInstructions.value,
-      syncInterval: syncInterval.value,
-      apiKey: apiKey.value
-    })
     isSaving.value = false
     showSuccess.value = true
     setTimeout(() => {
@@ -84,11 +106,12 @@ function saveAllSettings() {
     <div class="settings-body-scroll">
       <div class="settings-content-wrapper">
 
-                <SettingsAiTab 
+        <SettingsAiTab 
           v-if="category === 'ai'"
           v-model:autoGenerateSummary="autoGenerateSummary"
           v-model:autoDraftReplies="autoDraftReplies"
           v-model:enableVoiceDictation="enableVoiceDictation"
+          v-model:ollamaModel="ollamaModel"
         />
 
         <SettingsAgentTab
@@ -100,6 +123,7 @@ function saveAllSettings() {
         <SettingsSecurityTab
           v-else-if="category === 'security'"
           v-model:apiKey="apiKey"
+          v-model:sarvamApiKey="sarvamApiKey"
         />
 
         <SettingsSystemTab

@@ -7,7 +7,8 @@ import {
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
 import AiDraftPanel from './common/AiDraftPanel.vue'
-import { useDictation } from '../composables/useDictation'
+import { appApiFetch } from '../composables/useAppApi'
+import { useCompletion } from '@ai-sdk/vue'
 import { useSettings } from '../composables/useSettings'
 
 const { selectedEmail, sendEmailReply } = useMail()
@@ -84,126 +85,123 @@ const aiSummary = computed(() => {
 // File Attachment handling
 
 
-// Simulate voice input dictation with waveform animations
+let mediaRecorder: MediaRecorder | null = null
+let audioChunks: Blob[] = []
 
-const { startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
-  instructionText.value = result
-})
-
-function startDictation() {
+async function startDictation() {
+  if (draftState.value === 'generating') return
   draftState.value = 'dictating'
-  startVoiceDictation()
+  instructionText.value = ''
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder = new MediaRecorder(stream)
+    audioChunks = []
+
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) audioChunks.push(e.data)
+    }
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+      const reader = new FileReader()
+      reader.readAsDataURL(audioBlob)
+      reader.onloadend = async () => {
+        const base64Data = (reader.result as string).split(',')[1]
+        try {
+          const res = await appApiFetch<{text: string}>('/api/ai/transcribe', {
+            method: 'POST',
+            body: { 
+              audioBase64: base64Data,
+              apiKey: settings.value.sarvamApiKey
+            }
+          })
+          instructionText.value = res.text || 'Transcription failed.'
+        } catch (e) {
+          console.error('Transcription failed', e)
+        } finally {
+          draftState.value = 'empty'
+          stream.getTracks().forEach(track => track.stop())
+        }
+      }
+    }
+
+    mediaRecorder.start()
+  } catch (err) {
+    console.error('Error accessing microphone:', err)
+    draftState.value = 'empty'
+  }
 }
 
 function stopDictation() {
-  stopVoiceDictation()
-  draftState.value = 'empty'
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop()
+  } else {
+    draftState.value = 'empty'
+  }
 }
 
-function getDraftByPersonality(recipientName: string, subject: string, userPrompt: string, attachmentNotice: string) {
-  const tone = settings.value.agentPersonality
-  const custom = settings.value.customInstructions ? `\n\n[System Guidelines: ${settings.value.customInstructions}]` : ''
-  
-  if (tone === 'friendly') {
-    return `Subject: Re: ${subject}
+const ipcStreamFetch = (url: string, options: RequestInit): Promise<Response> => {
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
 
-Hey ${recipientName}! 😊
+  window.electronAPI.streamApi(
+    url,
+    { headers: options.headers, body: JSON.parse(options.body as string) },
+    {
+      onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
+      onFinish: () => writer.close(),
+      onError: (err: any) => writer.abort(err)
+    }
+  )
 
-Thanks so much for reaching out!
-
-${userPrompt ? `Regarding what you asked: "${userPrompt}"\n\nI just went through the details and everything sounds absolutely awesome! Let's definitely find some time next week to catch up and align on the specifics. We can jump on a video call to hash it out.` : `I just completed a quick review of the thread details! Everything looks super exciting. The team is making awesome progress and I'm really looking forward to our alignment sync tomorrow at 10:00 AM.`}${attachmentNotice}
-
-Let's make it happen! Have a fantastic day!
-
-Warmly,
-Alicia${custom}`
-  }
-  
-  if (tone === 'creative') {
-    return `Subject: Re: ${subject}
-
-Hi ${recipientName}! ✨
-
-Wow, thank you for sending this over! This is brilliant! 🚀
-
-${userPrompt ? `I love the direction of: "${userPrompt}"\n\nThis sparks some really cool ideas! Let's definitely coordinate our calendars so we can do a deep-dive brainstorming session on these specifics next week.` : `I've been reviewing our milestones and the sprint progression looks incredibly stellar! 🌟 Let's gather all our creative thoughts and map out the next launch milestones during our sync tomorrow at 10:00 AM.`}${attachmentNotice}
-
-Can't wait to collaborate and shape this further!
-
-Best and brightest,
-Alicia 🥂${custom}`
-  }
-  
-  if (tone === 'concise') {
-    return `Subject: Re: ${subject}
-
-${recipientName}:
-
-${userPrompt ? `Re: "${userPrompt}"\n\n- Details reviewed. Path forward is approved.\n- Action: Schedule 10m sync next week to lock in specifics.` : `- Milestones reviewed: Sprint progression is stable.\n- Action: Attending technical alignment sync tomorrow 10:00 AM (Conference Room B).`}${attachmentNotice}
-
-- Alicia${custom}`
-  }
-  
-  // Default: 'professional'
-  return `Subject: Re: ${subject}
-
-Hi ${recipientName},
-
-Thank you for your message.
-
-${userPrompt ? `Regarding your inquiry: "${userPrompt}"
-
-I have completed a review of the parameters, and the proposed path forward is appropriate. Let us ensure we coordinate our calendars to review the technical details next week.` : `I have reviewed the milestone parameters and the current sprint progression is highly satisfactory. I will prepare my feedback regarding the API specifications and will join you tomorrow at 10:00 AM in Conference Room B.`}${attachmentNotice}
-
-I look forward to our alignment sync.
-
-Best regards,
-Alicia${custom}`
+  return Promise.resolve(new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  }))
 }
 
-// Generate draft reply with premium real-time streaming
-function generateDraft() {
+const { completion: aiCompletion, complete: completeAiDraft } = useCompletion({
+  api: '/api/ai/reply',
+  fetch: ipcStreamFetch,
+  onFinish: () => {
+    draftState.value = 'drafted'
+    nextTick(() => {
+      if (draftTextareaRef.value) draftTextareaRef.value.scrollTop = draftTextareaRef.value.scrollHeight
+    })
+  },
+  onError: (err) => {
+    console.error('Draft generation error:', err)
+    draftState.value = 'empty'
+  }
+})
+
+watch(aiCompletion, (newVal) => {
+  if (draftState.value === 'generating') {
+    generatedDraft.value = newVal
+    nextTick(() => {
+      if (draftTextareaRef.value) draftTextareaRef.value.scrollTop = draftTextareaRef.value.scrollHeight
+    })
+  }
+})
+
+async function generateDraft() {
   if (draftState.value === 'generating') return
   
-  const recipientName = selectedEmail.value ? selectedEmail.value.sender.split(' ')[0] : 'there'
-  const subject = selectedEmail.value ? selectedEmail.value.subject.replace(/^Re:\s*/i, '') : 'Project Sync'
-  const userPrompt = instructionText.value.trim()
-  
-  // Format attachment details to list contextually in draft body
-  let attachmentNotice = ''
-  if (attachedFiles.value.length > 0) {
-    attachmentNotice = `\n\nI have attached the following file${attachedFiles.value.length > 1 ? 's' : ''} for your reference:\n` + 
-      attachedFiles.value.map(f => `- ${f.name}`).join('\n')
-  }
-
-  const targetText = getDraftByPersonality(recipientName, subject, userPrompt, attachmentNotice)
-
-  // Begin Streaming
   draftState.value = 'generating'
   generatedDraft.value = ''
   
-  let index = 0
-  const totalLength = targetText.length
+  const context = selectedEmail.value ? selectedEmail.value.body : ''
+  const prompt = instructionText.value.trim()
   
-  const streamInterval = setInterval(() => {
-    // Append organic chunks
-    const chunkSize = Math.floor(Math.random() * 3) + 2
-    const nextChunk = targetText.slice(index, index + chunkSize)
-    generatedDraft.value += nextChunk
-    index += chunkSize
-    
-    // Auto scroll
-    nextTick(() => {
-      if (draftTextareaRef.value) {
-        draftTextareaRef.value.scrollTop = draftTextareaRef.value.scrollHeight
-      }
-    })
-
-    if (index >= totalLength) {
-      clearInterval(streamInterval)
-      draftState.value = 'drafted'
+  await completeAiDraft(prompt, {
+    headers: {
+      'x-ai-model': settings.value.ollamaModel
+    },
+    body: { 
+      prompt, 
+      context
     }
-  }, 16)
+  })
 }
 
 // Actions in drafted review state
