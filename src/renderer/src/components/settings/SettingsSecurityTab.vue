@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { EyeOff, Eye, Check, AlertCircle } from '@lucide/vue'
+import { EyeOff, Eye, Check, AlertCircle, Mic } from '@lucide/vue'
 
 const props = defineProps<{
-  apiKey: string
   sarvamApiKey: string
 }>()
 
-const emit = defineEmits(['update:apiKey', 'update:sarvamApiKey'])
+const emit = defineEmits(['update:sarvamApiKey'])
 
 const showSarvamApiKey = ref(false)
 </script>

@@ -1,15 +1,9 @@
 import { ref, watch } from 'vue'
 
-export type PersonalityTone = 'professional' | 'friendly' | 'creative' | 'concise'
-
 export interface AiSettings {
   autoGenerateSummary: boolean
   autoDraftReplies: boolean
-  enableVoiceDictation: boolean
-  agentPersonality: PersonalityTone
   customInstructions: string
-  syncInterval: number // in minutes
-  apiKey: string
   ollamaModel: string
   digestModel: string
   sarvamApiKey: string
@@ -18,11 +12,7 @@ export interface AiSettings {
 const DEFAULT_SETTINGS: AiSettings = {
   autoGenerateSummary: true,
   autoDraftReplies: true,
-  enableVoiceDictation: true,
-  agentPersonality: 'professional',
   customInstructions: 'Focus on minimal, Vercel-style, professional responses. Avoid fluff.',
-  syncInterval: 5,
-  apiKey: 'bb-live-8a3c9f2d1e0b5a6c7e8d',
   ollamaModel: '',
   digestModel: '',
   sarvamApiKey: ''

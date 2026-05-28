@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
-import { FileText, X, Paperclip, Mic, CornerUpRight, Loader2 } from '@lucide/vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
+import { FileText, X, Paperclip, Mic, CornerUpRight, Loader2, Cpu, Square } from '@lucide/vue'
+import { useSettings } from '../../composables/useSettings'
+import { appApiFetch } from '../../composables/useAppApi'
 
 export interface AttachedFile {
   name: string
   size: string
   type: string
+  dataUrl?: string
 }
 
 const props = withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean
+  isGenerating?: boolean
   attachedFiles?: AttachedFile[]
   isRecording?: boolean
   isTranscribing?: boolean
@@ -19,6 +23,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   placeholder: "Dump your mind, let me manage",
   disabled: false,
+  isGenerating: false,
   attachedFiles: () => [],
   isRecording: false,
   isTranscribing: false,
@@ -31,6 +36,7 @@ const emit = defineEmits<{
   (e: 'send', text: string): void
   (e: 'startDictation'): void
   (e: 'stopDictation'): void
+  (e: 'stop'): void
 }>()
 
 const chatTextareaRef = ref<HTMLTextAreaElement | null>(null)
@@ -57,17 +63,25 @@ function triggerFileSelect() {
   fileInputRef.value?.click()
 }
 
-function handleFileChange(event: Event) {
+async function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   if (!target.files) return
   const newFiles = [...props.attachedFiles]
   for (let i = 0; i < target.files.length; i++) {
     const file = target.files[i]
     const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+    
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.readAsDataURL(file)
+    })
+
     newFiles.push({
       name: file.name,
       size: `${sizeMB} MB`,
-      type: file.type
+      type: file.type,
+      dataUrl
     })
   }
   target.value = ''
@@ -85,6 +99,56 @@ function handleSend() {
   if (!props.modelValue.trim() && props.attachedFiles.length === 0) return
   emit('send', props.modelValue)
 }
+
+const { settings } = useSettings()
+const ollamaModels = ref<{ name: string; size: number }[]>([])
+const hasVision = ref(false)
+
+async function fetchModels() {
+  try {
+    const list = await appApiFetch<{ name: string; size: number }[]>('/api/ai/models')
+    ollamaModels.value = list
+  } catch (err) {
+    console.error('Failed to load Ollama models:', err)
+  }
+}
+
+async function checkVision(modelName: string) {
+  if (!modelName) {
+    hasVision.value = false
+    return
+  }
+  try {
+    const res = await fetch('http://localhost:11434/api/show', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: modelName })
+    })
+    
+    if (res.ok) {
+      const data = await res.json()
+      hasVision.value = data.capabilities?.includes('vision') || false
+    } else {
+      hasVision.value = false
+    }
+    
+    // Automatically clear attachments if model doesn't support vision
+    if (!hasVision.value && props.attachedFiles.length > 0) {
+      emit('update:attachedFiles', [])
+    }
+  } catch (err) {
+    console.error('Failed to check capabilities:', err)
+    hasVision.value = false
+  }
+}
+
+watch(() => settings.value.ollamaModel, (newModel) => {
+  checkVision(newModel)
+}, { immediate: true })
+
+onMounted(() => {
+  fetchModels()
+})
 </script>
 
 <template>
@@ -93,6 +157,7 @@ function handleSend() {
       ref="fileInputRef"
       type="file"
       multiple
+      accept="image/*"
       style="display: none"
       @change="handleFileChange"
     >
@@ -138,7 +203,7 @@ function handleSend() {
 
       <div class="card-toolbar-row">
         <div class="toolbar-left-actions">
-          <button type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
+          <button v-if="hasVision" type="button" class="toolbar-icon-btn flex-center" @click="triggerFileSelect">
             <Paperclip :size="15" />
           </button>
           <button
@@ -151,12 +216,30 @@ function handleSend() {
           >
             <Mic :size="15" />
           </button>
+
+          <div class="inline-model-picker">
+            <Cpu :size="13" class="picker-icon" />
+            <select v-model="settings.ollamaModel" class="model-select">
+              <option value="" disabled>Select Model</option>
+              <option v-for="m in ollamaModels" :key="m.name" :value="m.name">{{ m.name }}</option>
+            </select>
+          </div>
         </div>
 
         <div class="toolbar-right-actions">
           <slot name="toolbar-right" />
           
           <button
+            v-if="isGenerating"
+            type="button"
+            class="card-send-btn card-stop-btn flex-center"
+            @click="emit('stop')"
+            title="Stop generating"
+          >
+            <Square :size="12" style="fill: currentColor" />
+          </button>
+          <button
+            v-else
             type="button"
             class="card-send-btn flex-center"
             :disabled="disabled || (!modelValue.trim() && attachedFiles.length === 0) || isRecording"
@@ -320,6 +403,19 @@ function handleSend() {
   cursor: not-allowed;
 }
 
+.card-stop-btn {
+  background-color: var(--text-primary) !important;
+  color: var(--bg-primary) !important;
+  border-color: var(--text-primary) !important;
+  opacity: 1 !important;
+  animation: pulse-stop 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-stop {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05); }
+}
+
 .dictating-pulse-row {
   display: flex;
   align-items: center;
@@ -336,10 +432,56 @@ function handleSend() {
 }
 
 .dictating-status-text {
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   color: #ef4444;
   font-weight: 500;
   flex: 1;
+}
+
+.inline-model-picker {
+  display: flex;
+  align-items: center;
+  background-color: transparent;
+  border-radius: 6px;
+  padding: 0 8px;
+  margin-left: 4px;
+  gap: 6px;
+  height: 28px;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.inline-model-picker:hover {
+  background-color: var(--bg-secondary);
+}
+
+.inline-model-picker:hover .picker-icon,
+.inline-model-picker:hover .model-select {
+  color: var(--text-primary);
+}
+
+.picker-icon {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.model-select {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  padding-right: 4px;
+  transition: color var(--transition-fast);
+}
+
+.model-select:focus {
+  outline: none;
 }
 
 .mini-voice-wave {

@@ -28,6 +28,7 @@ declare module 'vue' {
     LeftPanel: typeof import('./components/LeftPanel.vue')['default']
     MiddlePanel: typeof import('./components/MiddlePanel.vue')['default']
     RightPanel: typeof import('./components/RightPanel.vue')['default']
+    SettingsAccountsTab: typeof import('./components/settings/SettingsAccountsTab.vue')['default']
     SettingsAgentTab: typeof import('./components/settings/SettingsAgentTab.vue')['default']
     SettingsAiTab: typeof import('./components/settings/SettingsAiTab.vue')['default']
     SettingsDetailView: typeof import('./components/SettingsDetailView.vue')['default']

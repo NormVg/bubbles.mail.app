@@ -349,6 +349,20 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  async function disconnectGmailAccount(accountId: string) {
+    gmailLoading.value = true
+    gmailError.value = null
+
+    try {
+      await appApiFetch(`/api/gmail/accounts/${accountId}`, { method: 'DELETE' })
+      await refreshGmailAccounts()
+    } catch (error) {
+      gmailError.value = getErrorMessage(error)
+    } finally {
+      gmailLoading.value = false
+    }
+  }
+
   async function syncActiveGmailAccount() {
     const account = getActiveGmailAccount()
 
@@ -694,7 +708,7 @@ export const useMailStore = defineStore('mail', () => {
     setSelectedEmailId, setSearchQuery, setActiveCategory, setActiveTab,
     setViewMode, setActiveAccount, deleteEmail, archiveEmail, markUnread,
     sendEmailReply,
-    refreshGmailAccounts, connectGmailAccount, syncActiveGmailAccount, loadGmailMessages,
+    refreshGmailAccounts, connectGmailAccount, disconnectGmailAccount, syncActiveGmailAccount, loadGmailMessages,
     loadMoreGmailMessages
   }
 })
@@ -729,6 +743,7 @@ export function useMail() {
     markUnread: store.markUnread,
     refreshGmailAccounts: store.refreshGmailAccounts,
     connectGmailAccount: store.connectGmailAccount,
+    disconnectGmailAccount: store.disconnectGmailAccount,
     syncActiveGmailAccount: store.syncActiveGmailAccount,
     loadGmailMessages: store.loadGmailMessages,
     loadMoreGmailMessages: store.loadMoreGmailMessages

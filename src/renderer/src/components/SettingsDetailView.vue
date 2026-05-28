@@ -3,14 +3,14 @@ import { ref } from 'vue'
 import { useSettings } from '../composables/useSettings'
 import { Check, RefreshCw } from '@lucide/vue'
 import SettingsAiTab from './settings/SettingsAiTab.vue'
-import SettingsAgentTab from './settings/SettingsAgentTab.vue'
 import SettingsSecurityTab from './settings/SettingsSecurityTab.vue'
-import SettingsSystemTab from './settings/SettingsSystemTab.vue'
+
+import SettingsAccountsTab from './settings/SettingsAccountsTab.vue'
 
 const props = defineProps({
   category: {
     type: String,
-    default: 'ai'
+    default: 'accounts'
   }
 })
 
@@ -39,26 +39,11 @@ const autoDraftReplies = computed({
   get: () => settings.value.autoDraftReplies,
   set: (val) => settings.value.autoDraftReplies = val
 })
-const enableVoiceDictation = computed({
-  get: () => settings.value.enableVoiceDictation,
-  set: (val) => settings.value.enableVoiceDictation = val
-})
-const agentPersonality = computed({
-  get: () => settings.value.agentPersonality,
-  set: (val) => settings.value.agentPersonality = val
-})
 const customInstructions = computed({
   get: () => settings.value.customInstructions,
   set: (val) => settings.value.customInstructions = val
 })
-const syncInterval = computed({
-  get: () => settings.value.syncInterval,
-  set: (val) => settings.value.syncInterval = val
-})
-const apiKey = computed({
-  get: () => settings.value.apiKey,
-  set: (val) => settings.value.apiKey = val
-})
+
 const ollamaModel = computed({
   get: () => settings.value.ollamaModel,
   set: (val) => settings.value.ollamaModel = val
@@ -110,32 +95,22 @@ function saveAllSettings() {
     <div class="settings-body-scroll">
       <div class="settings-content-wrapper">
 
+        <SettingsAccountsTab
+          v-if="category === 'accounts'"
+        />
+
         <SettingsAiTab
-          v-if="category === 'ai'"
+          v-else-if="category === 'ai'"
           v-model:autoGenerateSummary="autoGenerateSummary"
           v-model:autoDraftReplies="autoDraftReplies"
-          v-model:enableVoiceDictation="enableVoiceDictation"
+          v-model:customInstructions="customInstructions"
           v-model:ollamaModel="ollamaModel"
           v-model:digestModel="digestModel"
         />
 
-        <SettingsAgentTab
-          v-else-if="category === 'agent'"
-          v-model:agentPersonality="agentPersonality"
-          v-model:customInstructions="customInstructions"
-        />
-
         <SettingsSecurityTab
           v-else-if="category === 'security'"
-          v-model:apiKey="apiKey"
           v-model:sarvamApiKey="sarvamApiKey"
-        />
-
-        <SettingsSystemTab
-          v-else-if="category === 'system'"
-          v-model:syncInterval="syncInterval"
-          :isDarkTheme="isDarkTheme"
-          @toggleTheme="toggleLocalTheme"
         />
       </div>
     </div>

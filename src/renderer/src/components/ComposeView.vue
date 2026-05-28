@@ -270,8 +270,12 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
     urlString,
     { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
-      onChunk: (chunk: string) => {
-        writer.write(new TextEncoder().encode(chunk))
+      onChunk: (chunk: any) => {
+        if (typeof chunk === 'string') {
+          writer.write(new TextEncoder().encode(chunk))
+        } else if (chunk.type === 'text') {
+          writer.write(new TextEncoder().encode(chunk.text || ''))
+        }
       },
       onFinish: () => writer.close(),
       onError: (err: any) => writer.abort(err)

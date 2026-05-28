@@ -8,6 +8,7 @@ export interface Message {
   text: string
   timestamp: Date
   contextEmails?: { id: string; subject: string }[]
+  images?: string[]
 }
 
 export interface ChatSession {
@@ -15,6 +16,8 @@ export interface ChatSession {
   title: string
   messages: Message[]
 }
+
+let abortCurrentStream: (() => void) | null = null
 
 // Initial session mock data
 const initialSessions: ChatSession[] = [
@@ -90,8 +93,8 @@ export const useAiStore = defineStore('aiAssistant', () => {
     ]
   }
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return
+  const sendMessage = async (text: string, images: string[] = []) => {
+    if (!text.trim() && images.length === 0) return
 
     const activeSess = sessions.value.find(s => s.id === currentSessionId.value)
     if (!activeSess) return
@@ -102,7 +105,8 @@ export const useAiStore = defineStore('aiAssistant', () => {
       sender: 'user',
       text,
       timestamp: new Date(),
-      contextEmails: activeContextEmails.value.length > 0 ? activeContextEmails.value.map(e => ({ id: e.id, subject: e.subject })) : undefined
+      contextEmails: activeContextEmails.value.length > 0 ? activeContextEmails.value.map(e => ({ id: e.id, subject: e.subject })) : undefined,
+      images: images.length > 0 ? images : undefined
     })
 
     // Auto-update session title dynamically based on the first user query
@@ -116,6 +120,12 @@ export const useAiStore = defineStore('aiAssistant', () => {
 
     // System context without auto-injected emails, unless EXPLICITLY set by user
     let systemContext = 'You are Bubbles AI, a helpful, concise, and professional email assistant.'
+    
+    const { settings } = useSettings()
+    if (settings.value.customInstructions) {
+      systemContext += `\n\nUSER CUSTOM INSTRUCTIONS (MUST FOLLOW):\n${settings.value.customInstructions}`
+    }
+
     if (activeContextEmails.value.length > 0) {
       systemContext += `\n\nThe user has explicitly asked you about the following emails:\n`
       activeContextEmails.value.forEach((email, index) => {
@@ -139,7 +149,6 @@ export const useAiStore = defineStore('aiAssistant', () => {
       timestamp: new Date()
     })
 
-    const { settings } = useSettings()
     const modelName = settings.value.ollamaModel
 
     if (!modelName) {
@@ -152,14 +161,15 @@ export const useAiStore = defineStore('aiAssistant', () => {
 
     try {
       await new Promise<void>((resolve, reject) => {
-        window.electronAPI.streamApi(
+        abortCurrentStream = window.electronAPI.streamApi(
           '/api/ai/chat',
           {
             headers: { 'x-ai-model': modelName },
             body: {
               prompt: text,
               system: systemContext,
-              history: conversationHistory
+              history: conversationHistory,
+              images: images.length > 0 ? images : undefined
             }
           },
           {
@@ -181,6 +191,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
               if (aiMsg) aiMsg.text = `⚠️ Error: ${err}`
               isThinking.value = false
               saveState()
+              abortCurrentStream = null
               reject(err)
             }
           }
@@ -190,8 +201,18 @@ export const useAiStore = defineStore('aiAssistant', () => {
       isThinking.value = false
       saveState()
     } finally {
+      abortCurrentStream = null
       activeContextEmails.value = [] // clear contexts after sending
     }
+  }
+
+  const stopGeneration = () => {
+    if (abortCurrentStream) {
+      abortCurrentStream()
+      abortCurrentStream = null
+    }
+    isThinking.value = false
+    saveState()
   }
 
   const createNewSession = () => {
@@ -253,7 +274,8 @@ export const useAiStore = defineStore('aiAssistant', () => {
     sendMessage,
     createNewSession,
     deleteSession,
-    clearChat
+    clearChat,
+    stopGeneration
   }
 })
 

@@ -7,7 +7,7 @@ import './assets/css/main.css'
 
 const { viewMode, refreshGmailAccounts } = useMail()
 
-const activeSettingsCategory = ref('ai')
+const activeSettingsCategory = ref('accounts')
 
 function handleSelectSettingsCategory(catId: string) {
   activeSettingsCategory.value = catId

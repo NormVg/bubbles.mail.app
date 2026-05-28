@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
-import { Sparkles, X, Copy, Check } from '@lucide/vue'
+import { Sparkles, X, Copy, Check, Brain } from '@lucide/vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
 import AiInputBox from './common/AiInputBox.vue'
@@ -9,7 +9,7 @@ import { Markdown } from 'vue-stream-markdown'
 import 'vue-stream-markdown/index.css'
 import 'vue-stream-markdown/theme.css'
 
-const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails } = useAiAssistant()
+const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails, stopGeneration } = useAiAssistant()
 const { viewMode, selectedEmailId } = useMail()
 
 const isFreshSession = computed(() => messages.value.length <= 1)
@@ -21,6 +21,7 @@ interface AttachedFile {
   name: string
   size: string
   type: string
+  dataUrl?: string
 }
 
 const attachedFiles = ref<AttachedFile[]>([])
@@ -60,13 +61,9 @@ function handleSend() {
 
   let formattedText = inputMessage.value.trim()
 
-  if (attachedFiles.value.length > 0) {
-    const fileNames = attachedFiles.value.map(f => `"${f.name}" (${f.size})`).join(', ')
-    const prefix = formattedText ? `${formattedText}\n\n` : ''
-    formattedText = `${prefix}📎 Attached files: ${fileNames}`
-  }
+  const images = attachedFiles.value.map(f => f.dataUrl).filter(Boolean) as string[]
 
-  sendMessage(formattedText)
+  sendMessage(formattedText, images)
   inputMessage.value = ''
   attachedFiles.value = []
   scrollToBottom()
@@ -109,13 +106,25 @@ onMounted(() => {
         :key="msg.id"
         class="message-wrapper"
         :class="msg.sender"
-        v-show="msg.sender === 'user' || msg.text"
+        v-show="msg.sender === 'user' || msg.text || msg.reasoning"
       >
         <div v-if="msg.sender === 'ai'" class="ai-response">
           <div class="ai-msg-header">
             <span class="ai-icon flex-center"><Sparkles :size="12" /></span>
           </div>
-          <div class="ai-msg-body">
+
+          <details v-if="msg.reasoning" class="reasoning-accordion" :open="!msg.text">
+            <summary class="reasoning-summary">
+              <Brain :size="12" class="reasoning-icon" />
+              <span>Thinking process</span>
+              <span v-if="!msg.text" class="reasoning-live-dot"></span>
+            </summary>
+            <div class="reasoning-body">
+              <Markdown :content="msg.reasoning" />
+            </div>
+          </details>
+
+          <div v-if="msg.text" class="ai-msg-body">
             <Markdown :content="msg.text" />
           </div>
           <div class="ai-msg-footer">
@@ -133,6 +142,9 @@ onMounted(() => {
             <div v-for="email in msg.contextEmails" :key="email.id" class="user-msg-context clickable" @click="goToEmail(email.id)" title="View this email">
               <span class="context-label">Context:</span> {{ email.subject }}
             </div>
+          </div>
+          <div v-if="msg.images && msg.images.length > 0" class="user-msg-images">
+            <img v-for="(img, idx) in msg.images" :key="idx" :src="img" class="user-msg-thumb" />
           </div>
           <div class="user-msg-text" v-html="formatUserText(msg.text)"></div>
         </div>
@@ -188,7 +200,9 @@ onMounted(() => {
           :isTranscribing="isTranscribing"
           :audioLevel="audioLevel"
           :disabled="isThinking || isTranscribing"
+          :isGenerating="isThinking"
           @send="handleSend"
+          @stop="stopGeneration"
           @startDictation="startVoiceDictation"
           @stopDictation="stopVoiceDictation"
         />
@@ -598,5 +612,91 @@ onMounted(() => {
 }
 [data-theme='light'] .user-msg-context .context-label {
   color: var(--text-muted);
+}
+
+.user-msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.user-msg-thumb {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='light'] .user-msg-thumb {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.reasoning-accordion {
+  margin: 8px 16px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.reasoning-summary {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.reasoning-icon {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.reasoning-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #a78bfa;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.reasoning-summary:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='light'] .reasoning-summary:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.reasoning-body {
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] .reasoning-body {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

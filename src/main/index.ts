@@ -219,6 +219,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow.maximize()
     mainWindow.show()
   })
 
@@ -316,6 +317,31 @@ app.whenReady().then(async () => {
           console.warn('[Electron IPC] Failed to fetch Ollama models:', err.message)
           return []
         }
+      }
+
+      // AI Model Show POST /api/ai/show
+      if (cleanPath === '/api/ai/show' && method === 'POST') {
+        const body = options.body || {}
+        if (!body.name) return { vision: false, thinking: false }
+        try {
+          const res = await fetch('http://localhost:11434/api/show', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: body.name })
+          })
+          if (res.ok) {
+            const data = await res.json() as any
+            if (data.capabilities) {
+              return {
+                vision: data.capabilities.includes('vision'),
+                thinking: data.capabilities.includes('thinking')
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn('[Electron IPC] Failed to fetch capabilities from Ollama API:', e.message)
+        }
+        return { vision: false, thinking: false }
       }
 
       // AI Digest POST /api/ai/digest
@@ -604,8 +630,8 @@ You MUST strictly use the exact keys from the schema:
           cc: body.cc ? cleanRecipients(body.cc) : undefined,
           bcc: body.bcc ? cleanRecipients(body.bcc) : undefined,
           subject: body.subject,
-          bodyText: body.bodyText,
-          bodyHtml: body.bodyHtml,
+          bodyText: body.bodyText ? body.bodyText + '\n\n--\nSent via bubbles.mail' : undefined,
+          bodyHtml: body.bodyHtml ? body.bodyHtml + '<br><br>--<br><i>Sent via bubbles.mail</i>' : undefined,
           threadId: body.threadId,
           inReplyTo: body.inReplyTo,
           references: body.references,
@@ -709,7 +735,7 @@ You MUST strictly use the exact keys from the schema:
 
       if (path === '/api/ai/draft') {
         result = await streamText({
-          model: ollama(modelName),
+          model: ollama(modelName, { think: true }),
           system: 'You are an expert email drafting assistant. Draft professional, concise, and highly effective emails. Output the email subject on the first line prefixed with "Subject:", then a blank line, then the email body. Do not output any other conversational filler.',
           prompt: parsedBody.prompt,
           abortSignal: controller.signal
@@ -717,8 +743,8 @@ You MUST strictly use the exact keys from the schema:
       } else if (path === '/api/ai/reply') {
         console.log(`[Stream IPC] Starting reply generation for ${modelName}...`)
         result = await streamText({
-          model: ollama(modelName),
-          system: 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
+          model: ollama(modelName, { think: true }),
+          system: parsedBody.system || 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
           prompt: `Context:\n${parsedBody.context}\n\nInstructions:\n${parsedBody.prompt}`,
           abortSignal: controller.signal
         })
@@ -727,12 +753,26 @@ You MUST strictly use the exact keys from the schema:
         const fullPrompt = parsedBody.history
           ? `${parsedBody.history}\n\nUser: ${parsedBody.prompt}`
           : parsedBody.prompt
-        result = await streamText({
-          model: ollama(modelName),
-          system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
-          prompt: fullPrompt,
-          abortSignal: controller.signal
-        })
+          
+        if (parsedBody.images && parsedBody.images.length > 0) {
+          const content: any[] = [{ type: 'text', text: fullPrompt }]
+          for (const imgUrl of parsedBody.images) {
+            content.push({ type: 'image', image: new URL(imgUrl) })
+          }
+          result = await streamText({
+            model: ollama(modelName, { think: true }),
+            system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
+            messages: [{ role: 'user', content }],
+            abortSignal: controller.signal
+          })
+        } else {
+          result = await streamText({
+            model: ollama(modelName, { think: true }),
+            system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
+            prompt: fullPrompt,
+            abortSignal: controller.signal
+          })
+        }
       } else {
         throw new Error('Unknown streaming path')
       }
@@ -743,7 +783,6 @@ You MUST strictly use the exact keys from the schema:
           console.log(`[Stream IPC] Stream aborted by client.`)
           break
         }
-        console.log(`[Stream IPC] Chunk received:`, chunk.slice(0, 20) + '...')
         event.sender.send(`stream-chunk-${streamId}`, chunk)
       }
 

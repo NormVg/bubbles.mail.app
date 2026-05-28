@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sparkles, Shield, UserCheck, RefreshCw } from '@lucide/vue'
+import { Sparkles, Shield, RefreshCw, Users } from '@lucide/vue'
 
-const activeCategory = ref('ai')
+const activeCategory = ref('accounts')
 
 const categories = [
+  { id: 'accounts', label: 'Connected Accounts', icon: Users, desc: 'Manage your logins' },
   { id: 'ai', label: 'AI Automation', icon: Sparkles, desc: 'Summaries & generation' },
-  { id: 'agent', label: 'Agent Personality', icon: UserCheck, desc: 'Tone & default rules' },
-  { id: 'security', label: 'Security & Access', icon: Shield, desc: 'API keys & privacy' },
-  { id: 'system', label: 'System & Sync', icon: RefreshCw, desc: 'Sync timers & logs' }
+  { id: 'security', label: 'Security & Access', icon: Shield, desc: 'API keys & privacy' }
 ]
 
 const emit = defineEmits(['select-category'])

@@ -6,7 +6,7 @@ import { RefreshCw, Cpu, AlertTriangle, ChevronDown } from '@lucide/vue'
 const props = defineProps<{
   autoGenerateSummary: boolean
   autoDraftReplies: boolean
-  enableVoiceDictation: boolean
+  customInstructions: string
   ollamaModel: string
   digestModel: string
 }>()
@@ -14,7 +14,7 @@ const props = defineProps<{
 const emit = defineEmits([
   'update:autoGenerateSummary',
   'update:autoDraftReplies',
-  'update:enableVoiceDictation',
+  'update:customInstructions',
   'update:ollamaModel',
   'update:digestModel'
 ])
@@ -189,20 +189,20 @@ function formatSize(bytes: number): string {
         </label>
       </div>
 
-      <!-- Toggle 3: Voice dictation -->
-      <div class="setting-row-card">
-        <div class="setting-card-left">
-          <h4 class="setting-title">Voice Dictation Integration</h4>
-          <p class="setting-subtitle">Equip the quick reply cards and AI assistant views with the direct voice dictation waveform composer.</p>
+      <!-- Custom Instructions -->
+      <div class="setting-row-card column-layout">
+        <div class="setting-card-header-row">
+          <div class="setting-card-left">
+            <h4 class="setting-title">Custom AI Instructions</h4>
+            <p class="setting-subtitle">Define specific rules, formatting preferences, or behavioral guidelines that the AI should follow when generating responses or summaries.</p>
+          </div>
         </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            :checked="enableVoiceDictation"
-            @change="emit('update:enableVoiceDictation', ($event.target as HTMLInputElement).checked)"
-          />
-          <span class="slider"></span>
-        </label>
+        <textarea
+          class="custom-instructions-textarea"
+          :value="customInstructions"
+          @input="emit('update:customInstructions', ($event.target as HTMLTextAreaElement).value)"
+          placeholder="e.g. Always format responses in bullet points. Be extremely concise. Use professional tone."
+        ></textarea>
       </div>
     </div>
   </div>
@@ -392,6 +392,27 @@ function formatSize(bytes: number): string {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+.custom-instructions-textarea {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  padding: 12px;
+  resize: vertical;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.custom-instructions-textarea:focus {
+  border-color: var(--text-primary);
+  background-color: var(--bg-primary);
+  box-shadow: 0 0 0 1px var(--text-primary);
 }
 
 @keyframes pulse {

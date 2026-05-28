@@ -81,6 +81,10 @@ function handleManualGenerate() {
     generateEmailSummary()
   }
 }
+// Interactive reply states
+const draftState = ref<'empty' | 'dictating' | 'generating' | 'drafted'>('empty')
+const instructionText = ref('')
+const generatedDraft = ref('')
 
 watch(selectedEmail, () => {
   manuallyGeneratedSummary.value = false
@@ -97,12 +101,8 @@ watch(selectedEmail, () => {
   draftState.value = 'empty'
   generatedDraft.value = ''
   instructionText.value = ''
-})
+}, { immediate: true })
 
-// Interactive reply states
-const draftState = ref<'empty' | 'dictating' | 'generating' | 'drafted'>('empty')
-const instructionText = ref('')
-const generatedDraft = ref('')
 
 const draftTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const replyTextareaRef = ref<HTMLTextAreaElement | null>(null)
@@ -192,9 +192,12 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
     urlString,
     { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
-      onChunk: (chunk: string) => {
-        console.log('[EmailDetail] Streaming chunk received:', chunk.slice(0, 20))
-        writer.write(new TextEncoder().encode(chunk))
+      onChunk: (chunk: any) => {
+        if (typeof chunk === 'string') {
+          writer.write(new TextEncoder().encode(chunk))
+        } else if (chunk.type === 'text') {
+          writer.write(new TextEncoder().encode(chunk.text || ''))
+        }
       },
       onFinish: () => {
         console.log('[EmailDetail] Streaming finished.')
@@ -249,12 +252,18 @@ async function generateDraft() {
 
   const prompt = instructionText.value.trim()
 
+  let systemPrompt = 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.'
+  if (settings.value.customInstructions) {
+    systemPrompt += `\n\nUSER CUSTOM INSTRUCTIONS (MUST FOLLOW):\n${settings.value.customInstructions}`
+  }
+
   await completeAiDraft(prompt, {
     headers: {
       'x-ai-model': settings.value.ollamaModel
     },
     body: {
       prompt,
+      system: systemPrompt,
       context
     }
   })
