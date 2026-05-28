@@ -11,7 +11,7 @@ import { appApiFetch } from '../composables/useAppApi'
 import { useCompletion } from '@ai-sdk/vue'
 import { useSettings } from '../composables/useSettings'
 
-const { selectedEmail, sendEmailReply } = useMail()
+const { selectedEmail, sendEmailReply, aiSummaryCache } = useMail()
 const { settings } = useSettings()
 
 const manuallyGeneratedSummary = ref(false)
@@ -21,8 +21,77 @@ const showSummary = computed(() => {
   return settings.value.autoGenerateSummary || manuallyGeneratedSummary.value
 })
 
+interface AiSummary {
+  keyPoints: string[]
+  hasActionItems: boolean
+  hasMeeting: boolean
+  hasDeadline: boolean
+  readTime: number
+}
+
+const aiSummaryData = ref<AiSummary | null>(null)
+const isGeneratingSummary = ref(false)
+
+async function generateEmailSummary() {
+  if (!selectedEmail.value || isGeneratingSummary.value) return
+  
+  const emailId = selectedEmail.value.id
+  if (aiSummaryCache.value[emailId]) {
+    aiSummaryData.value = aiSummaryCache.value[emailId]
+    return
+  }
+  
+  isGeneratingSummary.value = true
+  aiSummaryData.value = null
+
+  try {
+    const report = await appApiFetch<any>('/api/ai/summary', {
+      method: 'POST',
+      body: {
+        emailBody: selectedEmail.value.body,
+        model: settings.value.ollamaModel || 'gemma2:2b'
+      }
+    })
+    console.log('[EmailDetail] Received summary report from IPC:', report)
+    
+    // Force clean object to avoid proxy/reactivity issues
+    const cleanReport = typeof report === 'string' ? JSON.parse(report) : JSON.parse(JSON.stringify(report))
+    console.log('[EmailDetail] Cleaned report:', cleanReport)
+    
+    aiSummaryData.value = cleanReport
+    aiSummaryCache.value[emailId] = cleanReport
+  } catch (error) {
+    console.error('Failed to generate summary:', error)
+    // Minimal fallback on failure
+    aiSummaryData.value = {
+      keyPoints: ['Failed to generate summary with AI.'],
+      hasActionItems: false,
+      hasMeeting: false,
+      hasDeadline: false,
+      readTime: Math.max(1, Math.ceil(selectedEmail.value.body.split(' ').length / 200))
+    }
+  } finally {
+    isGeneratingSummary.value = false
+  }
+}
+
+function handleManualGenerate() {
+  manuallyGeneratedSummary.value = true
+  if (!aiSummaryData.value && !isGeneratingSummary.value) {
+    generateEmailSummary()
+  }
+}
+
 watch(selectedEmail, () => {
   manuallyGeneratedSummary.value = false
+  if (selectedEmail.value && aiSummaryCache.value[selectedEmail.value.id]) {
+    aiSummaryData.value = aiSummaryCache.value[selectedEmail.value.id]
+  } else {
+    aiSummaryData.value = null
+    if (settings.value.autoGenerateSummary) {
+      generateEmailSummary()
+    }
+  }
 })
 
 // Interactive reply states
@@ -32,7 +101,6 @@ const generatedDraft = ref('')
 
 const draftTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const replyTextareaRef = ref<HTMLTextAreaElement | null>(null)
-
 
 // Attachment State
 interface AttachedFile {
@@ -49,37 +117,6 @@ const senderInitials = computed(() => {
     return (parts[0][0] + parts[1][0]).toUpperCase()
   }
   return parts[0][0].toUpperCase()
-})
-
-// Generate a smart summary from email content
-const aiSummary = computed(() => {
-  if (!selectedEmail.value) return null
-  const email = selectedEmail.value
-  const body = email.body
-
-  // Extract key points from the email body
-  const sentences = body.split(/[.!?]+/).filter(s => s.trim().length > 20)
-  const keyPoints: string[] = []
-
-  if (sentences.length > 0) {
-    keyPoints.push(sentences[0].trim().slice(0, 120))
-  }
-  if (sentences.length > 2) {
-    keyPoints.push(sentences[Math.floor(sentences.length / 2)].trim().slice(0, 120))
-  }
-
-  // Detect action items
-  const hasActionItems = /please|let's|need to|should|must|deadline|meeting|review|send|submit|confirm/i.test(body)
-  const hasMeeting = /meeting|call|sync|standup|conference|zoom|meet/i.test(body)
-  const hasDeadline = /deadline|due|by end of|before|until|asap|urgent/i.test(body)
-
-  return {
-    keyPoints,
-    hasActionItems,
-    hasMeeting,
-    hasDeadline,
-    readTime: Math.max(1, Math.ceil(body.split(' ').length / 200))
-  }
 })
 
 // File Attachment handling
@@ -275,40 +312,49 @@ function discardDraft() {
     </div>
 
     <!-- AI Summary Card -->
-    <div v-if="aiSummary && showSummary" class="ai-summary-card">
+    <div v-if="showSummary" class="ai-summary-card" :class="{ 'is-loading': isGeneratingSummary }">
       <div class="summary-header">
         <div class="summary-header-left">
-          <span class="summary-icon flex-center"><Sparkles :size="12" /></span>
-          <span class="summary-label">Summary</span>
+          <span class="summary-icon flex-center">
+            <Sparkles :size="12" />
+          </span>
+          <span class="summary-label">{{ isGeneratingSummary ? 'AI is summarizing...' : 'Summary' }}</span>
         </div>
-        <span class="read-time">{{ aiSummary.readTime }} min read</span>
+        <span class="read-time" v-if="aiSummaryData">{{ aiSummaryData.readTime }} min read</span>
       </div>
 
-      <div class="summary-body">
-        <p v-for="(point, i) in aiSummary.keyPoints" :key="i" class="summary-point">
-          {{ point }}
-        </p>
+      <div class="summary-body" v-if="isGeneratingSummary">
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line short"></div>
       </div>
 
-      <div class="summary-signals" v-if="aiSummary.hasActionItems || aiSummary.hasMeeting || aiSummary.hasDeadline">
-        <span v-if="aiSummary.hasActionItems" class="signal-tag action">
-          <Zap :size="11" /> Action needed
-        </span>
-        <span v-if="aiSummary.hasMeeting" class="signal-tag meeting">
-          <ClockIcon :size="11" /> Meeting
-        </span>
-        <span v-if="aiSummary.hasDeadline" class="signal-tag deadline">
-          <ClockIcon :size="11" /> Time-sensitive
-        </span>
-      </div>
+      <template v-else-if="aiSummaryData">
+        <div class="summary-body">
+          <p v-for="(point, i) in aiSummaryData.keyPoints" :key="i" class="summary-point">
+            {{ point }}
+          </p>
+        </div>
+
+        <div class="summary-signals" v-if="aiSummaryData.hasActionItems || aiSummaryData.hasMeeting || aiSummaryData.hasDeadline">
+          <span v-if="aiSummaryData.hasActionItems" class="signal-tag action">
+            <Zap :size="11" /> Action needed
+          </span>
+          <span v-if="aiSummaryData.hasMeeting" class="signal-tag meeting">
+            <ClockIcon :size="11" /> Meeting
+          </span>
+          <span v-if="aiSummaryData.hasDeadline" class="signal-tag deadline">
+            <ClockIcon :size="11" /> Time-sensitive
+          </span>
+        </div>
+      </template>
     </div>
 
     <!-- On-Demand Summary Generation Placeholder -->
-    <div v-else-if="aiSummary && !showSummary" class="ai-summary-on-demand flex-center">
+    <div v-else class="ai-summary-on-demand flex-center">
       <div class="on-demand-inner">
         <span class="on-demand-spark-icon flex-center"><Sparkles :size="13" /></span>
         <span class="on-demand-notice-text">Email summary is available</span>
-        <button class="on-demand-gen-btn flex-center" @click="manuallyGeneratedSummary = true">
+        <button class="on-demand-gen-btn flex-center" @click="handleManualGenerate">
           <Sparkles :size="11" /> Generate summary
         </button>
       </div>
@@ -619,5 +665,39 @@ function discardDraft() {
   border-color: var(--text-primary);
   color: var(--text-primary);
   background-color: var(--bg-secondary);
+}
+
+.is-loading {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.2);
+}
+
+.spin {
+  animation: spin 2s linear infinite;
+  color: var(--primary-color);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.skeleton-line {
+  height: 14px;
+  background: linear-gradient(90deg, var(--bg-primary) 25%, var(--border-color) 50%, var(--bg-primary) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.skeleton-line.short {
+  width: 70%;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 </style>

@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import { useDailyDigest } from './useDailyDigest'
 import { appApiFetch } from './useAppApi'
@@ -71,6 +71,31 @@ export const useMailStore = defineStore('mail', () => {
   const gmailHasMore = ref(true)
   const gmailPageLoading = ref(false)
   const { selectedDateKey } = useDailyDigest()
+
+  const aiSummaryCache = ref<Record<string, any>>({})
+
+  // Load cache from localStorage
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const storedCache = window.localStorage.getItem('bubbles_ai_summary_cache')
+      if (storedCache) {
+        aiSummaryCache.value = JSON.parse(storedCache)
+      }
+    } catch (e) {
+      console.error('Failed to load AI summary cache:', e)
+    }
+  }
+
+  // Auto-save cache to localStorage
+  watch(aiSummaryCache, (newCache) => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('bubbles_ai_summary_cache', JSON.stringify(newCache))
+      } catch (e) {
+        console.error('Failed to save AI summary cache:', e)
+      }
+    }
+  }, { deep: true })
 
   const gmailAccountEmails = computed(() => gmailAccounts.value.map(account => account.email))
   const visibleAccounts = computed(() => gmailAccountEmails.value)
@@ -665,7 +690,7 @@ export const useMailStore = defineStore('mail', () => {
     accountUnreadCounts, categoryCounts, gmailAccounts, gmailAccountEmails,
     timelineDateKeys,
     visibleAccounts, gmailLoading, gmailSyncing, gmailConnectPending, gmailError,
-    gmailHasMore, gmailPageLoading,
+    gmailHasMore, gmailPageLoading, aiSummaryCache,
     setSelectedEmailId, setSearchQuery, setActiveCategory, setActiveTab,
     setViewMode, setActiveAccount, deleteEmail, archiveEmail, markUnread,
     sendEmailReply,
@@ -682,7 +707,7 @@ export function useMail() {
     accountUnreadCounts, categoryCounts, gmailAccounts, gmailAccountEmails,
     timelineDateKeys,
     visibleAccounts, gmailLoading, gmailSyncing, gmailConnectPending, gmailError,
-    gmailHasMore, gmailPageLoading
+    gmailHasMore, gmailPageLoading, aiSummaryCache
   } = storeToRefs(store)
   
   return {
@@ -691,7 +716,7 @@ export function useMail() {
     accountUnreadCounts, categoryCounts, gmailAccounts, gmailAccountEmails,
     timelineDateKeys,
     visibleAccounts, gmailLoading, gmailSyncing, gmailConnectPending, gmailError,
-    gmailHasMore, gmailPageLoading,
+    gmailHasMore, gmailPageLoading, aiSummaryCache,
     setSelectedEmailId: store.setSelectedEmailId,
     setSearchQuery: store.setSearchQuery,
     setActiveCategory: store.setActiveCategory,

@@ -441,6 +441,89 @@ app.whenReady().then(async () => {
         console.log(`[Electron IPC] Accounts returned: ${result.length} accounts`)
         return result
       }
+      // AI Email Summary POST /api/ai/summary
+      if (cleanPath === '/api/ai/summary' && method === 'POST') {
+        const body = options.body || {}
+        console.log(`[AI Summary] Started summary generation for model: ${body.model}`)
+        
+        if (!body.emailBody) throw new Error('Missing emailBody')
+        if (!body.model) throw new Error('No AI model selected')
+
+        let attempts = 0
+        const maxAttempts = 3
+        let finalReport = null
+
+        while (attempts < maxAttempts) {
+          attempts++
+          console.log(`[AI Summary] Attempt ${attempts}...`)
+          try {
+            const { output, text } = await generateText({
+              model: ollama(body.model),
+              system: `You are an executive email assistant. Analyze this email and return a structured JSON summary.
+Do NOT wrap your response in markdown code blocks (\`\`\`json). Output raw, parseable JSON only.
+You MUST strictly use the exact keys from the schema:
+- keyPoints: Array of 1 to 3 strings highlighting the main takeaways.
+- hasActionItems: boolean
+- hasMeeting: boolean
+- hasDeadline: boolean
+- readTime: number (estimated minutes to read)`,
+              prompt: `Email content:\n\n${body.emailBody}`,
+              output: Output.object({
+                schema: z.object({
+                  keyPoints: z.array(z.string()),
+                  hasActionItems: z.boolean(),
+                  hasMeeting: z.boolean(),
+                  hasDeadline: z.boolean(),
+                  readTime: z.number()
+                })
+              }),
+              mode: 'json'
+            })
+            console.log(`[AI Summary] Attempt ${attempts} raw text:`, text)
+            console.log(`[AI Summary] Attempt ${attempts} parsed output:`, output)
+            finalReport = output
+            break // Success, exit loop
+          } catch (e: any) {
+            console.warn(`[AI Summary] Attempt ${attempts} failed. Error:`, e.message)
+            console.warn(`[AI Summary] Attempt ${attempts} error raw text:`, e.text || 'No raw text in error')
+            
+            if (e.text) {
+              try {
+                // Manual repair fallback
+                console.log(`[AI Summary] Attempting manual JSON repair fallback...`)
+                let text = e.text.trim()
+                if (text.startsWith('```json')) text = text.replace(/^```json\n?/, '')
+                if (text.startsWith('```')) text = text.replace(/^```\n?/, '')
+                if (text.endsWith('```')) text = text.replace(/\n?```$/, '')
+
+                const parsed = JSON.parse(text)
+                
+                // Map common mistakes
+                const safeReport = {
+                  keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [parsed.summary || parsed.text || 'Email summarized'],
+                  hasActionItems: Boolean(parsed.hasActionItems || parsed.actionItems || parsed.actions),
+                  hasMeeting: Boolean(parsed.hasMeeting || parsed.meeting),
+                  hasDeadline: Boolean(parsed.hasDeadline || parsed.deadline),
+                  readTime: Number(parsed.readTime || 1) || 1
+                }
+                
+                console.log(`[AI Summary] Manual repair successful:`, safeReport)
+                finalReport = safeReport
+                break // Repair successful, exit loop
+              } catch (repairErr) {
+                console.warn(`[AI Summary] Repair failed:`, repairErr)
+              }
+            }
+            if (attempts === maxAttempts) {
+              console.error(`[AI Summary] Max attempts reached. Throwing error.`)
+              throw new Error(`AI generation failed after ${maxAttempts} attempts: ${e.message}`)
+            }
+          }
+        }
+
+        console.log(`[AI Summary] Returning final report`)
+        return finalReport
+      }
 
       // 2. DELETE /api/gmail/accounts/[accountId]
       if (cleanPath.startsWith('/api/gmail/accounts/') && method === 'DELETE') {
