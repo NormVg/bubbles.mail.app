@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
-import { 
-  Sparkles, 
-  Zap, 
+import {
+  Sparkles,
+  Zap,
   Clock as ClockIcon
 } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
@@ -56,23 +56,23 @@ const aiSummary = computed(() => {
   if (!selectedEmail.value) return null
   const email = selectedEmail.value
   const body = email.body
-  
+
   // Extract key points from the email body
   const sentences = body.split(/[.!?]+/).filter(s => s.trim().length > 20)
   const keyPoints: string[] = []
-  
+
   if (sentences.length > 0) {
     keyPoints.push(sentences[0].trim().slice(0, 120))
   }
   if (sentences.length > 2) {
     keyPoints.push(sentences[Math.floor(sentences.length / 2)].trim().slice(0, 120))
   }
-  
+
   // Detect action items
   const hasActionItems = /please|let's|need to|should|must|deadline|meeting|review|send|submit|confirm/i.test(body)
   const hasMeeting = /meeting|call|sync|standup|conference|zoom|meet/i.test(body)
   const hasDeadline = /deadline|due|by end of|before|until|asap|urgent/i.test(body)
-  
+
   return {
     keyPoints,
     hasActionItems,
@@ -111,7 +111,7 @@ async function startDictation() {
         try {
           const res = await appApiFetch<{text: string}>('/api/ai/transcribe', {
             method: 'POST',
-            body: { 
+            body: {
               audioBase64: base64Data,
               apiKey: settings.value.sarvamApiKey
             }
@@ -141,13 +141,14 @@ function stopDictation() {
   }
 }
 
-const ipcStreamFetch = (url: string, options: RequestInit): Promise<Response> => {
+const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Promise<Response> => {
+  const urlString = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url
   const { readable, writable } = new TransformStream()
   const writer = writable.getWriter()
 
   window.electronAPI.streamApi(
-    url,
-    { headers: options.headers, body: JSON.parse(options.body as string) },
+    urlString,
+    { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
       onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
       onFinish: () => writer.close(),
@@ -186,19 +187,19 @@ watch(aiCompletion, (newVal) => {
 
 async function generateDraft() {
   if (draftState.value === 'generating') return
-  
+
   draftState.value = 'generating'
   generatedDraft.value = ''
-  
+
   const context = selectedEmail.value ? selectedEmail.value.body : ''
   const prompt = instructionText.value.trim()
-  
+
   await completeAiDraft(prompt, {
     headers: {
       'x-ai-model': settings.value.ollamaModel
     },
-    body: { 
-      prompt, 
+    body: {
+      prompt,
       context
     }
   })
@@ -209,7 +210,7 @@ const showSuccessOverlay = ref(false)
 
 async function sendFinalEmail() {
   if (!selectedEmail.value || !selectedEmail.value.gmailAccountId) return
-  
+
   try {
     const payload = {
       accountId: selectedEmail.value.gmailAccountId,
@@ -218,9 +219,9 @@ async function sendFinalEmail() {
       bodyText: generatedDraft.value,
       inReplyTo: selectedEmail.value.gmailMessageId
     }
-    
+
     await sendEmailReply(payload)
-    
+
     showSuccessOverlay.value = true
     setTimeout(() => {
       showSuccessOverlay.value = false
@@ -262,10 +263,10 @@ function discardDraft() {
     <div class="detail-subject-card">
       <h2 class="email-subject">{{ selectedEmail.subject }}</h2>
       <div class="badges-row">
-        <span 
-          v-for="tag in selectedEmail.tags" 
-          :key="tag" 
-          class="badge" 
+        <span
+          v-for="tag in selectedEmail.tags"
+          :key="tag"
+          class="badge"
           :class="`badge-${tag}`"
         >
           {{ tag }}
@@ -282,7 +283,7 @@ function discardDraft() {
         </div>
         <span class="read-time">{{ aiSummary.readTime }} min read</span>
       </div>
-      
+
       <div class="summary-body">
         <p v-for="(point, i) in aiSummary.keyPoints" :key="i" class="summary-point">
           {{ point }}

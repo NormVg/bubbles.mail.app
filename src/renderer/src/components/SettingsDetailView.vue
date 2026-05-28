@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useSettings, PersonalityTone } from '../composables/useSettings'
+import { useSettings } from '../composables/useSettings'
 import { Check, RefreshCw } from '@lucide/vue'
 import SettingsAiTab from './settings/SettingsAiTab.vue'
 import SettingsAgentTab from './settings/SettingsAgentTab.vue'
@@ -78,7 +78,7 @@ const showSuccess = ref(false)
 
 function saveAllSettings() {
   isSaving.value = true
-  
+
   // Simulate premium architectural sync delay
   setTimeout(() => {
     isSaving.value = false
@@ -95,9 +95,9 @@ function saveAllSettings() {
     <!-- Header -->
     <div class="pane-header detail-header">
       <h2 class="pane-title">Configure Bubbles</h2>
-      <button 
-        class="save-btn flex-center" 
-        :disabled="isSaving" 
+      <button
+        class="save-btn flex-center"
+        :disabled="isSaving"
         @click="saveAllSettings"
       >
         <RefreshCw v-if="isSaving" class="spin-icon" :size="13" />
@@ -110,7 +110,7 @@ function saveAllSettings() {
     <div class="settings-body-scroll">
       <div class="settings-content-wrapper">
 
-        <SettingsAiTab 
+        <SettingsAiTab
           v-if="category === 'ai'"
           v-model:autoGenerateSummary="autoGenerateSummary"
           v-model:autoDraftReplies="autoDraftReplies"

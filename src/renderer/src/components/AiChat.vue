@@ -16,6 +16,13 @@ const isFreshSession = computed(() => messages.value.length <= 1)
 
 const inputMessage = ref('')
 const messageContainer = ref<HTMLElement | null>(null)
+
+interface AttachedFile {
+  name: string
+  size: string
+  type: string
+}
+
 const attachedFiles = ref<AttachedFile[]>([])
 const copiedMessageId = ref<string | null>(null)
 
@@ -50,23 +57,23 @@ function scrollToBottom() {
 
 function handleSend() {
   if (!inputMessage.value.trim() && attachedFiles.value.length === 0) return
-  
+
   let formattedText = inputMessage.value.trim()
-  
+
   if (attachedFiles.value.length > 0) {
     const fileNames = attachedFiles.value.map(f => `"${f.name}" (${f.size})`).join(', ')
     const prefix = formattedText ? `${formattedText}\n\n` : ''
     formattedText = `${prefix}📎 Attached files: ${fileNames}`
   }
-  
-  sendMessage(formattedText, null)
+
+  sendMessage(formattedText)
   inputMessage.value = ''
   attachedFiles.value = []
   scrollToBottom()
 }
 
 function selectSuggestion(suggestion: string) {
-  sendMessage(suggestion, null)
+  sendMessage(suggestion)
   scrollToBottom()
 }
 
@@ -85,7 +92,7 @@ onMounted(() => {
 
 <template>
   <div class="ai-chat">
-    
+
     <!-- Top spacer to push content to center when fresh -->
     <div class="smooth-spacer" :style="{ flex: isFreshSession ? 1 : 0 }"></div>
 
@@ -94,12 +101,12 @@ onMounted(() => {
         <h1 class="welcome-title">Welcome to <span class="underlined-brand">Bubbles.mail</span></h1>
       </div>
     </div>
-    
+
     <!-- Chat messages -->
     <div class="chat-messages" :class="{ 'show-chat': !isFreshSession }" ref="messageContainer">
-      <div 
-        v-for="msg in messages" 
-        :key="msg.id" 
+      <div
+        v-for="msg in messages"
+        :key="msg.id"
         class="message-wrapper"
         :class="msg.sender"
         v-show="msg.sender === 'user' || msg.text"
@@ -130,7 +137,7 @@ onMounted(() => {
           <div class="user-msg-text" v-html="formatUserText(msg.text)"></div>
         </div>
       </div>
-      
+
       <div v-if="isThinking" class="message-wrapper ai">
         <div class="ai-response thinking">
           <div class="ai-msg-header">
@@ -149,9 +156,9 @@ onMounted(() => {
       <!-- Suggestion chips -->
       <div v-if="isFreshSession && !isThinking" class="suggestions-bar">
         <div class="suggestions-scroll">
-          <button 
-            v-for="chip in getSuggestedActions()" 
-            :key="chip" 
+          <button
+            v-for="chip in getSuggestedActions()"
+            :key="chip"
             class="suggestion-chip"
             @click="selectSuggestion(chip)"
             :disabled="isThinking"

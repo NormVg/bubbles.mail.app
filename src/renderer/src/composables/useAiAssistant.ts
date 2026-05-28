@@ -1,39 +1,4 @@
 import { ref, computed } from 'vue'
-import { Email } from './useMail'
-import { useSettings } from './useSettings'
-
-export interface Message {
-  id: string
-  sender: 'user' | 'ai'
-  text: string
-  timestamp: Date
-  contextEmails?: { id: string; subject: string }[]
-}
-
-export interface ChatSession {
-  id: string
-  title: string
-  messages: Message[]
-}
-
-// Initial session mock data
-const initialSessions: ChatSession[] = [
-  {
-    id: 's1',
-    title: 'New Chat',
-    messages: [
-      {
-        id: 'm1',
-        sender: 'ai',
-        text: `Hello Alicia! How can I help you manage your inbox or draft responses today?`,
-        timestamp: new Date(Date.now() - 600000)
-      }
-    ]
-  }
-]
-
-import { defineStore, storeToRefs } from 'pinia'
-import { watch } from 'vue'
 
 export const useAiStore = defineStore('aiAssistant', () => {
   // Load from localStorage if available
@@ -93,7 +58,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return
-    
+
     const activeSess = sessions.value.find(s => s.id === currentSessionId.value)
     if (!activeSess) return
 
@@ -105,14 +70,14 @@ export const useAiStore = defineStore('aiAssistant', () => {
       timestamp: new Date(),
       contextEmails: activeContextEmails.value.length > 0 ? activeContextEmails.value.map(e => ({ id: e.id, subject: e.subject })) : undefined
     })
-    
+
     // Auto-update session title dynamically based on the first user query
     if (activeSess.title === 'New Chat' || activeSess.title === 'Action Engine') {
       let cleanTitle = text.replace(/^[📎📎 ]*Attached files:.*?\n*/gi, '').trim()
       if (!cleanTitle) cleanTitle = 'File upload analysis'
       activeSess.title = cleanTitle.slice(0, 20) + (cleanTitle.length > 20 ? '...' : '')
     }
-    
+
     isThinking.value = true
 
     // System context without auto-injected emails, unless EXPLICITLY set by user

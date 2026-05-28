@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default logo path
-LOGO_PATH="./.info2ai/bubbles-logo.png"
+LOGO_PATH="./.info2ai/bubbles-logo2.png"
 
 # Allow passing a custom logo path as an argument
 if [ -n "$1" ]; then

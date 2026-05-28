@@ -38,7 +38,6 @@ import { ollama } from 'ai-sdk-ollama'
 import { streamText, generateText, Output } from 'ai'
 import { z } from 'zod'
 import { SarvamAIClient } from 'sarvamai'
-import { Readable } from 'stream'
 
 // We initialize SQLite database on app load
 getSqliteConnection()
@@ -204,7 +203,7 @@ function startOAuthCallbackServer() {
 
 function createWindow(): void {
   const bounds = getWindowBounds()
-  
+
   const mainWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -264,7 +263,7 @@ app.whenReady().then(async () => {
     try {
       const cleanPath = path.split('?')[0]
       const method = options.method || 'GET'
-      
+
       console.log(`[Electron IPC] API Router: ${method} ${path}`)
 
       // AI Transcribe POST /api/ai/transcribe
@@ -272,31 +271,31 @@ app.whenReady().then(async () => {
         const body = options.body || {}
         if (!body.audioBase64) throw new Error('Missing audioBase64')
         const apiKey = body.apiKey || process.env.SARVAM_API_KEY || "YOUR_SARVAM_API_KEY"
-        
+
         console.log(`[Sarvam] Starting transcription using key: ${apiKey.substring(0, 5)}...`)
-        
+
         const client = new SarvamAIClient({
           apiSubscriptionKey: apiKey
         })
-        
+
         try {
           const fs = require('fs')
           const path = require('path')
           const os = require('os')
-          
+
           const tempFilePath = path.join(os.tmpdir(), `dictation_${Date.now()}.webm`)
           fs.writeFileSync(tempFilePath, Buffer.from(body.audioBase64, 'base64'))
           console.log(`[Sarvam] Saved temp audio file to ${tempFilePath}`)
-          
+
           const response = await client.speechToText.transcribe({
             file: fs.createReadStream(tempFilePath),
             language_code: "en-IN",
             model: "saaras:v3"
           } as any)
-          
+
           fs.unlinkSync(tempFilePath)
           console.log(`[Sarvam] Transcription successful:`, response)
-          
+
           return { text: response.transcript || (response as any).text || '' }
         } catch (error: any) {
           console.error(`[Sarvam] Transcription error:`, error)
@@ -488,7 +487,7 @@ app.whenReady().then(async () => {
         const messageId = parts[parts.length - 1]
         const accountId = options.query?.accountId
         if (!accountId) throw new Error('Missing accountId query parameter')
-        
+
         const message = await readGmailMessage({
           accountId,
           messageId,
@@ -549,11 +548,11 @@ app.whenReady().then(async () => {
         const q = options.query || {}
         const accountEmail = q.accountEmail
         if (!accountEmail) throw new Error('accountEmail query param required')
-        
+
         const sqlite = getSqliteConnection()
         const stmt = sqlite.prepare('SELECT * FROM gmail_drafts WHERE account_email = ? ORDER BY updated_at DESC')
         const rows = stmt.all(accountEmail) as any[]
-        
+
         return rows.map(row => ({
           id: row.id,
           subject: row.subject,
@@ -624,7 +623,7 @@ app.whenReady().then(async () => {
         throw new Error('No AI model selected. Please select a model in Settings > AI.')
       }
       const parsedBody = options.body || {}
-      
+
       if (path === '/api/ai/draft') {
         result = await streamText({
           model: ollama(modelName),
@@ -640,7 +639,7 @@ app.whenReady().then(async () => {
           abortSignal: controller.signal
         })
       } else if (path === '/api/ai/chat') {
-        const fullPrompt = parsedBody.history 
+        const fullPrompt = parsedBody.history
           ? `${parsedBody.history}\n\nUser: ${parsedBody.prompt}`
           : parsedBody.prompt
         result = await streamText({
@@ -657,7 +656,7 @@ app.whenReady().then(async () => {
         if (controller.signal.aborted) break
         event.sender.send(`stream-chunk-${streamId}`, chunk)
       }
-      
+
       if (!controller.signal.aborted) {
         event.sender.send(`stream-finish-${streamId}`)
       }
@@ -670,7 +669,7 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipcMain.on('api-stream-abort', (event, streamId) => {
+  ipcMain.on('api-stream-abort', (_event, streamId) => {
     if (activeStreams.has(streamId)) {
       activeStreams.get(streamId)?.abort()
       activeStreams.delete(streamId)

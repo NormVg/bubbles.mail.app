@@ -182,7 +182,7 @@ async function saveDraft() {
       }
     })
     await composeStore.loadSavedDrafts()
-    
+
     draftSaved.value = true
     window.setTimeout(() => {
       draftSaved.value = false
@@ -231,7 +231,7 @@ async function startVoiceInput() {
         try {
           const res = await appApiFetch<{text: string}>('/api/ai/transcribe', {
             method: 'POST',
-            body: { 
+            body: {
               audioBase64: base64Data,
               apiKey: settings.value.sarvamApiKey
             }
@@ -261,13 +261,14 @@ function stopVoiceInput() {
   }
 }
 
-const ipcStreamFetch = (url: string, options: RequestInit): Promise<Response> => {
+const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Promise<Response> => {
+  const urlString = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url
   const { readable, writable } = new TransformStream()
   const writer = writable.getWriter()
 
   window.electronAPI.streamApi(
-    url,
-    { headers: options.headers, body: JSON.parse(options.body as string) },
+    urlString,
+    { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
     {
       onChunk: (chunk: string) => writer.write(new TextEncoder().encode(chunk)),
       onFinish: () => writer.close(),
@@ -307,7 +308,7 @@ async function generateAiDraft() {
   if (aiDraftState.value === 'generating') return
   aiDraftState.value = 'generating'
   aiDraft.value = ''
-  
+
   await completeAiDraft(aiPrompt.value, {
     headers: {
       'x-ai-model': settings.value.ollamaModel
@@ -457,10 +458,10 @@ function getSendError(error: unknown) {
       <div class="compose-sheet">
                 <ComposeFields />
 
-        <ComposeToolbar 
-          @wrap="wrapSelection" 
-          @prefix="insertLinePrefix" 
-          @link="insertLink" 
+        <ComposeToolbar
+          @wrap="wrapSelection"
+          @prefix="insertLinePrefix"
+          @link="insertLink"
         />
 
         <label class="body-editor-shell">

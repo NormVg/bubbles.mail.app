@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Key, EyeOff, Eye, Check, AlertCircle, Mic } from '@lucide/vue'
+import { Key, EyeOff, Eye, Check, AlertCircle } from '@lucide/vue'
 
 const props = defineProps<{
   apiKey: string
@@ -9,7 +9,6 @@ const props = defineProps<{
 
 const emit = defineEmits(['update:apiKey', 'update:sarvamApiKey'])
 
-const showApiKey = ref(false)
 const showSarvamApiKey = ref(false)
 </script>
 
@@ -30,15 +29,15 @@ const showSarvamApiKey = ref(false)
       </div>
 
       <div class="api-input-wrapper">
-        <input 
-          :type="showSarvamApiKey ? 'text' : 'password'" 
+        <input
+          :type="showSarvamApiKey ? 'text' : 'password'"
           :value="sarvamApiKey"
           @input="emit('update:sarvamApiKey', ($event.target as HTMLInputElement).value)"
           class="api-key-input"
           placeholder="Enter your Sarvam subscription key"
         />
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="api-toggle-visibility-btn flex-center"
           @click="showSarvamApiKey = !showSarvamApiKey"
         >

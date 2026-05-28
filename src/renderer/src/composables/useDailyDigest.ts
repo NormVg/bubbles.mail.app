@@ -94,7 +94,7 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     isGeneratingDigest.value = true
     try {
       const { settings } = useSettings()
-      
+
       const payload = {
         model: settings.value.digestModel,
         emails: emails.map(e => ({
@@ -124,7 +124,7 @@ export const useDigestStore = defineStore('dailyDigest', () => {
       }
 
       saveDigestToCache(accountId, dateKey, report)
-      
+
       const existingIdx = dailyReports.value.findIndex(r => r.dateKey === dateKey)
       if (existingIdx !== -1) {
         dailyReports.value[existingIdx] = report
@@ -149,11 +149,12 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     }
 
     const latestEmailTimestamp = emailsForDay.reduce((max, e) => Math.max(max, e.timestamp || 0), 0)
-    
+
     let report = dailyReports.value.find(r => r.dateKey === dateKey)
     if (!report) {
-      report = loadCachedDigest(accountId, dateKey)
-      if (report) {
+      const cached = loadCachedDigest(accountId, dateKey)
+      if (cached) {
+        report = cached
         dailyReports.value.push(report)
       }
     }
