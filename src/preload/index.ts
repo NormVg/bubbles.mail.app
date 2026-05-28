@@ -8,11 +8,11 @@ const electronAPI = {
   streamApi: (
     path: string, 
     options: any, 
-    callbacks: { onChunk: (chunk: string) => void, onFinish: () => void, onError: (err: any) => void }
+    callbacks: { onChunk: (chunk: any) => void, onFinish: () => void, onError: (err: any) => void }
   ) => {
     const streamId = Math.random().toString(36).substring(7)
     
-    const chunkListener = (_event: any, chunk: string) => callbacks.onChunk(chunk)
+    const chunkListener = (_event: any, chunk: any) => callbacks.onChunk(chunk)
     const finishListener = () => {
       cleanup()
       callbacks.onFinish()

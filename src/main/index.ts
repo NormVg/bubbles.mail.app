@@ -738,7 +738,8 @@ You MUST strictly use the exact keys from the schema:
           model: ollama(modelName, { think: true }),
           system: 'You are an expert email drafting assistant. Draft professional, concise, and highly effective emails. Output the email subject on the first line prefixed with "Subject:", then a blank line, then the email body. Do not output any other conversational filler.',
           prompt: parsedBody.prompt,
-          abortSignal: controller.signal
+          abortSignal: controller.signal,
+          providerOptions: { ollama: { think: true } }
         })
       } else if (path === '/api/ai/reply') {
         console.log(`[Stream IPC] Starting reply generation for ${modelName}...`)
@@ -746,7 +747,8 @@ You MUST strictly use the exact keys from the schema:
           model: ollama(modelName, { think: true }),
           system: parsedBody.system || 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
           prompt: `Context:\n${parsedBody.context}\n\nInstructions:\n${parsedBody.prompt}`,
-          abortSignal: controller.signal
+          abortSignal: controller.signal,
+          providerOptions: { ollama: { think: true } }
         })
       } else if (path === '/api/ai/chat') {
         console.log(`[Stream IPC] Starting chat generation for ${modelName}...`)
@@ -763,27 +765,37 @@ You MUST strictly use the exact keys from the schema:
             model: ollama(modelName, { think: true }),
             system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
             messages: [{ role: 'user', content }],
-            abortSignal: controller.signal
+            abortSignal: controller.signal,
+            providerOptions: { ollama: { think: true } }
           })
         } else {
           result = await streamText({
             model: ollama(modelName, { think: true }),
             system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
             prompt: fullPrompt,
-            abortSignal: controller.signal
+            abortSignal: controller.signal,
+            providerOptions: { ollama: { think: true } }
           })
         }
       } else {
         throw new Error('Unknown streaming path')
       }
 
-      console.log(`[Stream IPC] Stream started, waiting for chunks...`)
-      for await (const chunk of result.textStream) {
+      console.log(`[Stream IPC] Stream started, waiting for fullStream parts...`)
+      for await (const part of result.fullStream) {
         if (controller.signal.aborted) {
           console.log(`[Stream IPC] Stream aborted by client.`)
           break
         }
-        event.sender.send(`stream-chunk-${streamId}`, chunk)
+        
+        // DEBUG: Log the chunk type
+        console.log(`[Stream IPC] Received chunk type: ${part.type}`)
+        
+        if (part.type === 'reasoning-delta') {
+          event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: part.textDelta || part.text })
+        } else if (part.type === 'text-delta') {
+          event.sender.send(`stream-chunk-${streamId}`, { type: 'text', text: part.textDelta || part.text })
+        }
       }
 
       if (!controller.signal.aborted) {

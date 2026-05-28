@@ -6,6 +6,7 @@ export interface Message {
   id: string
   sender: 'user' | 'ai'
   text: string
+  reasoning?: string
   timestamp: Date
   contextEmails?: { id: string; subject: string }[]
   images?: string[]
@@ -173,11 +174,17 @@ export const useAiStore = defineStore('aiAssistant', () => {
             }
           },
           {
-            onChunk: (chunk: string) => {
+            onChunk: (chunk: any) => {
               isThinking.value = false
               const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
               if (aiMsg) {
-                aiMsg.text += chunk
+                if (typeof chunk === 'string') {
+                  aiMsg.text += chunk
+                } else if (chunk.type === 'reasoning') {
+                  aiMsg.reasoning = (aiMsg.reasoning || '') + (chunk.text || '')
+                } else if (chunk.type === 'text') {
+                  aiMsg.text += (chunk.text || '')
+                }
                 // Throttle saving chunks to prevent IO bottleneck, save on finish anyway
               }
             },

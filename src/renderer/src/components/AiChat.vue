@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
-import { Sparkles, X, Copy, Check, Brain } from '@lucide/vue'
+import { Sparkles, X, Copy, Check, Brain, ChevronDown } from '@lucide/vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
 import AiInputBox from './common/AiInputBox.vue'
@@ -11,6 +11,23 @@ import 'vue-stream-markdown/theme.css'
 
 const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails, stopGeneration } = useAiAssistant()
 const { viewMode, selectedEmailId } = useMail()
+
+const openReasonings = ref<Record<string, boolean>>({})
+
+const isReasoningOpen = (msg: any) => {
+  if (openReasonings.value[msg.id] !== undefined) {
+    return openReasonings.value[msg.id]
+  }
+  return !msg.text
+}
+
+const toggleReasoning = (msgId: string) => {
+  const currentMsg = messages.value.find((m) => m.id === msgId)
+  if (!currentMsg) return
+  
+  const current = openReasonings.value[msgId] !== undefined ? openReasonings.value[msgId] : !currentMsg.text
+  openReasonings.value[msgId] = !current
+}
 
 const isFreshSession = computed(() => messages.value.length <= 1)
 
@@ -109,30 +126,38 @@ onMounted(() => {
         v-show="msg.sender === 'user' || msg.text || msg.reasoning"
       >
         <div v-if="msg.sender === 'ai'" class="ai-response">
-          <div class="ai-msg-header">
+          <div class="ai-msg-sidebar">
             <span class="ai-icon flex-center"><Sparkles :size="12" /></span>
           </div>
 
-          <details v-if="msg.reasoning" class="reasoning-accordion" :open="!msg.text">
-            <summary class="reasoning-summary">
-              <Brain :size="12" class="reasoning-icon" />
-              <span>Thinking process</span>
-              <span v-if="!msg.text" class="reasoning-live-dot"></span>
-            </summary>
-            <div class="reasoning-body">
-              <Markdown :content="msg.reasoning" />
+          <div class="ai-msg-content">
+            <div v-if="msg.reasoning" class="reasoning-accordion">
+              <div class="reasoning-summary" @click="toggleReasoning(msg.id)">
+                <Brain :size="12" class="reasoning-icon" />
+                <span>Thought process</span>
+                <span v-if="!msg.text" class="reasoning-live-dot"></span>
+                <ChevronDown :size="14" class="reasoning-chevron" :class="{ 'is-rotated': isReasoningOpen(msg) }" />
+              </div>
+              <div class="reasoning-body-wrapper" :class="{ 'is-open': isReasoningOpen(msg) }">
+                <div class="reasoning-body-inner">
+                  <div class="reasoning-body">
+                    <Markdown :content="msg.reasoning" />
+                  </div>
+                </div>
+              </div>
             </div>
-          </details>
 
-          <div v-if="msg.text" class="ai-msg-body">
-            <Markdown :content="msg.text" />
-          </div>
-          <div class="ai-msg-footer">
-            <div class="ai-msg-actions">
-              <button class="msg-action-btn" @click="copyToClipboard(msg.text, msg.id)" title="Copy message">
-                <Check v-if="copiedMessageId === msg.id" :size="12" class="success-icon" />
-                <Copy v-else :size="12" />
-              </button>
+            <div v-if="msg.text" class="ai-msg-body">
+              <Markdown :content="msg.text" />
+            </div>
+            
+            <div class="ai-msg-footer">
+              <div class="ai-msg-actions">
+                <button class="msg-action-btn" @click="copyToClipboard(msg.text, msg.id)" title="Copy message">
+                  <Check v-if="copiedMessageId === msg.id" :size="12" class="success-icon" />
+                  <Copy v-else :size="12" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -332,22 +357,28 @@ onMounted(() => {
 .ai-response {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  gap: 16px;
+  align-items: flex-start;
 }
 
-.ai-msg-header {
+.ai-msg-sidebar {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.ai-msg-content {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .ai-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   background-color: var(--text-primary);
   color: var(--bg-primary);
 }
@@ -394,7 +425,7 @@ onMounted(() => {
   font-size: 0.84rem;
   color: var(--text-primary);
   line-height: 1.6;
-  padding-left: 24px;
+  padding-left: 0;
 }
 
 :deep(.draft-block) {
@@ -634,29 +665,37 @@ onMounted(() => {
 }
 
 .reasoning-accordion {
-  margin: 8px 16px;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  overflow: hidden;
+  margin: 4px 0 8px 0;
+  background-color: transparent;
+  border: none;
 }
 
 .reasoning-summary {
-  padding: 8px 12px;
+  padding: 4px 0;
   font-size: 0.75rem;
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
   font-family: var(--font-sans);
   font-weight: 500;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background-color 0.2s ease;
+  transition: color 0.2s ease;
+}
+
+.reasoning-chevron {
+  margin-left: 2px;
+  opacity: 0.6;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reasoning-chevron.is-rotated {
+  transform: rotate(180deg);
 }
 
 .reasoning-icon {
-  opacity: 0.6;
+  opacity: 0.8;
   flex-shrink: 0;
 }
 
@@ -676,23 +715,30 @@ onMounted(() => {
 }
 
 .reasoning-summary:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
 }
 
-[data-theme='light'] .reasoning-summary:hover {
-  background-color: rgba(0, 0, 0, 0.03);
+.reasoning-body-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reasoning-body-wrapper.is-open {
+  grid-template-rows: 1fr;
+}
+
+.reasoning-body-inner {
+  overflow: hidden;
 }
 
 .reasoning-body {
-  padding: 12px;
-  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+  padding: 4px 0 4px 16px;
+  border-left: 2px solid var(--border-color);
   font-size: 0.8rem;
   color: var(--text-secondary);
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-[data-theme='light'] .reasoning-body {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: transparent;
 }
 
 @keyframes fade-in-up {
