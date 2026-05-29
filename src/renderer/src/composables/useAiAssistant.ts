@@ -312,6 +312,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
     activeContextEmails,
     getSuggestedActions,
     sendMessage,
+    createNewSession,
     deleteSession,
     clearChat,
     stopGeneration,
