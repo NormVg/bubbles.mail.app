@@ -324,6 +324,7 @@ function handleForward() {
 .minimal-new-chat-btn {
   background: transparent;
   border: none;
+  outline: none;
   font-family: var(--font-sans);
   font-size: 0.95rem;
   font-weight: 500;
@@ -350,6 +351,7 @@ function handleForward() {
 .minimal-trash-btn {
   background: transparent;
   border: 1px solid transparent;
+  outline: none;
   color: var(--text-muted);
   width: 24px;
   height: 24px;

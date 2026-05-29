@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Sparkles, Trash2 } from '@lucide/vue'
+import { Sparkles, Trash2, Plus } from '@lucide/vue'
 import AiChat from './AiChat.vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 
@@ -38,7 +38,7 @@ const isFreshSession = computed(() => {
             title="New chat session"
             @click="createNewSession"
           >
-            +
+            <Plus :size="14" />
           </button>
 
           <button
@@ -149,6 +149,7 @@ const isFreshSession = computed(() => {
 .minimal-new-chat-btn {
   background: transparent;
   border: none;
+  outline: none;
   font-family: var(--font-sans);
   font-size: 1rem;
   font-weight: 500;
@@ -169,6 +170,7 @@ const isFreshSession = computed(() => {
 .minimal-trash-btn {
   background: transparent;
   border: 1px solid transparent;
+  outline: none;
   color: var(--text-muted);
   width: 26px;
   height: 26px;
