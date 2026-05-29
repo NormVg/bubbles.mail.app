@@ -374,10 +374,6 @@ export const useMailStore = defineStore('mail', () => {
     gmailSyncing.value = true
     gmailError.value = null
 
-    // Automatically clear any active timeline date filter when starting a sync 
-    // to ensure the user immediately sees the freshly retrieved emails.
-    selectedDateKey.value = ''
-
     try {
       await appApiFetch('/api/gmail/sync', {
         method: 'POST',
