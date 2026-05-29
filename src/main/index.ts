@@ -33,7 +33,6 @@ import { getSqliteConnection } from './db/client'
 import { listGmailAccounts, deleteGmailAccount } from './utils/gmail/repository'
 import { createGmailAuthUrl } from './utils/gmail/oauth'
 import { connectGmailAccountFromCallback, listCachedMessages, sendGmailMessage, syncGmailMessages, readGmailMessage, applyGmailMessageAction } from './utils/gmail/service'
-import { startImapWatcher, stopImapWatcher, setupAppLifecycle } from './utils/gmail/imap'
 
 import { ollama } from 'ai-sdk-ollama'
 import { streamText, generateText, Output } from 'ai'
@@ -479,7 +478,7 @@ app.whenReady().then(async () => {
 
         let attempts = 0
         const maxAttempts = 3
-        let finalReport = null
+        let finalReport: any = null
 
         while (attempts < maxAttempts) {
           attempts++
@@ -504,8 +503,7 @@ You MUST strictly use the exact keys from the schema:
                   hasDeadline: z.boolean(),
                   readTime: z.number()
                 })
-              }),
-              mode: 'json'
+              })
             })
             console.log(`[AI Summary] Attempt ${attempts} raw text:`, text)
             console.log(`[AI Summary] Attempt ${attempts} parsed output:`, output)
@@ -832,10 +830,10 @@ OUTPUT FORMAT:
               console.log(`[Stream IPC] Tool Call Raw Part:`, JSON.stringify(part, null, 2))
               event.sender.send(`stream-chunk-${streamId}`, { type: 'tool-call', toolName: part.toolName, args: (part as any).args || (part as any).input })
             } else if (part.type === 'tool-result') {
-              event.sender.send(`stream-chunk-${streamId}`, { type: 'tool-result', toolName: part.toolName, result: part.result })
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'tool-result', toolName: part.toolName, result: (part as any).output || (part as any).result })
             } else if (part.type === 'text-delta') {
               // Ollama sometimes leaks <think>...</think> inside text-delta chunks
-              let chunk = (part.textDelta || part.text || '')
+              let chunk = (part.text || (part as any).textDelta || '')
               textBuffer += chunk
               
               // Process the buffer for think tags

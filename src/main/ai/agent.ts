@@ -1,4 +1,4 @@
-import { streamText } from 'ai'
+import { streamText, stepCountIs } from 'ai'
 import { ollama } from 'ai-sdk-ollama'
 import { createSearchEmailsTool, createReadEmailTool, createManageEmailTool, createStageEmailsForSendingTool } from './tools'
 
@@ -29,7 +29,7 @@ export async function createChatStream(options: ChatAgentOptions) {
       system,
       messages,
       tools,
-      maxSteps,
+      stopWhen: stepCountIs(maxSteps),
       abortSignal,
       providerOptions: { ollama: { think: true } }
     })
@@ -38,9 +38,9 @@ export async function createChatStream(options: ChatAgentOptions) {
   return await streamText({
     model: ollama(modelName, { think: true }),
     system,
-    prompt,
+    prompt: prompt || '',
     tools,
-    maxSteps,
+    stopWhen: stepCountIs(maxSteps),
     abortSignal,
     providerOptions: { ollama: { think: true } }
   })

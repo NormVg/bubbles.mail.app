@@ -29,12 +29,10 @@ declare module 'vue' {
     MiddlePanel: typeof import('./components/MiddlePanel.vue')['default']
     RightPanel: typeof import('./components/RightPanel.vue')['default']
     SettingsAccountsTab: typeof import('./components/settings/SettingsAccountsTab.vue')['default']
-    SettingsAgentTab: typeof import('./components/settings/SettingsAgentTab.vue')['default']
     SettingsAiTab: typeof import('./components/settings/SettingsAiTab.vue')['default']
     SettingsDetailView: typeof import('./components/SettingsDetailView.vue')['default']
     SettingsSecurityTab: typeof import('./components/settings/SettingsSecurityTab.vue')['default']
     SettingsSidebar: typeof import('./components/SettingsSidebar.vue')['default']
-    SettingsSystemTab: typeof import('./components/settings/SettingsSystemTab.vue')['default']
     Versions: typeof import('./components/Versions.vue')['default']
   }
 }

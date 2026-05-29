@@ -330,6 +330,7 @@ export function useAiAssistant() {
     createNewSession: store.createNewSession,
     deleteSession: store.deleteSession,
     clearChat: store.clearChat,
+    stopGeneration: store.stopGeneration,
     saveState: store.saveState
   }
 }

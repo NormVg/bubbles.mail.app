@@ -23,12 +23,6 @@ if (typeof document !== 'undefined') {
   isDarkTheme.value = document.documentElement.classList.contains('dark-theme')
 }
 
-function toggleLocalTheme() {
-  isDarkTheme.value = !isDarkTheme.value
-  if (typeof document !== 'undefined') {
-    document.documentElement.classList.toggle('dark-theme', isDarkTheme.value)
-  }
-}
 
 // Compute form states to map directly to settings object
 const autoGenerateSummary = computed({

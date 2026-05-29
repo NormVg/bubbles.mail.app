@@ -4,7 +4,7 @@ import { readGmailMessage } from '../../utils/gmail/service'
 
 export const createReadEmailTool = (accountId: string) => tool({
   description: 'Read the full body and details of a specific email by its ID. Use this when you need to understand the full context of an email.',
-  parameters: z.object({
+  inputSchema: z.object({
     messageId: z.string().describe('The ID of the email to read.'),
     targetAccountId: z.string().optional().describe('The account ID the email belongs to (found in search results). If omitted, uses the active account.')
   }),
@@ -29,9 +29,9 @@ export const createReadEmailTool = (accountId: string) => tool({
         id: message.id,
         sender: message.sender,
         subject: message.subject,
-        body: message.body, // Contains the full text body
+        body: message.bodyText || message.bodyHtml, // Contains the full text body
         timestamp: message.timestamp,
-        isUnread: message.isUnread,
+        unread: message.unread,
         threadId: message.threadId,
         labels: message.labels
       }

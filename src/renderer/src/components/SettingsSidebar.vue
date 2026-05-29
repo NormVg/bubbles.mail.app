@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sparkles, Shield, RefreshCw, Users } from '@lucide/vue'
+import { Sparkles, Shield, Users } from '@lucide/vue'
 
 const activeCategory = ref('accounts')
 

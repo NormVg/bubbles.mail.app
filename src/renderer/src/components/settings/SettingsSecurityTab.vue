@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { EyeOff, Eye, Check, AlertCircle, Mic } from '@lucide/vue'
+import { EyeOff, Eye } from '@lucide/vue'
 
 const props = defineProps<{
   sarvamApiKey: string

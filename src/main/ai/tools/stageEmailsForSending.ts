@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 export const createStageEmailsForSendingTool = (accountId: string) => tool({
   description: 'Stage one or multiple emails to be sent by the user. Use this when the user asks you to draft or send emails. The emails will be staged in the UI for the user to review and send with a single click.',
-  parameters: z.object({
+  inputSchema: z.object({
     emails: z.array(z.object({
       to: z.array(z.string()).optional().describe('List of recipient email addresses. Use this parameter.'),
       recipient: z.string().optional().describe('Fallback for recipient email address.'),
