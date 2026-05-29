@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { Archive, Trash2, Reply, ReplyAll, Forward, Sparkles } from '@lucide/vue'
+import { Archive, Trash2, Reply, ReplyAll, Forward, Sparkles, EyeOff } from '@lucide/vue'
 import { useMail } from '../composables/useMail'
+import { useSettings } from '../composables/useSettings'
 import { useAiAssistant } from '../composables/useAiAssistant'
+import { computed } from 'vue'
 
 import { useComposeStore } from '../stores/useComposeStore'
 
 const { viewMode, selectedEmail, deleteEmail, archiveEmail } = useMail()
+const { settings } = useSettings()
 const composeStore = useComposeStore()
 const { 
   sessions, 
@@ -34,6 +37,25 @@ function handleArchive() {
 function handleDelete() {
   if (selectedEmail.value) {
     deleteEmail(selectedEmail.value.id)
+  }
+}
+
+const isIgnored = computed(() => {
+  if (!selectedEmail.value || !Array.isArray(settings.value.ignoredDigestSenders)) return false
+  return settings.value.ignoredDigestSenders.includes(selectedEmail.value.senderEmail.toLowerCase())
+})
+
+function toggleIgnore() {
+  if (!selectedEmail.value) return
+  const email = selectedEmail.value.senderEmail.toLowerCase()
+  if (!Array.isArray(settings.value.ignoredDigestSenders)) {
+    settings.value.ignoredDigestSenders = []
+  }
+  const list = settings.value.ignoredDigestSenders
+  if (list.includes(email)) {
+    settings.value.ignoredDigestSenders = list.filter(e => e !== email)
+  } else {
+    settings.value.ignoredDigestSenders = [...list, email]
   }
 }
 
@@ -103,6 +125,14 @@ function handleForward() {
             </button>
             <button class="tool-btn" title="Forward" @click="handleForward">
               <Forward :size="16" />
+            </button>
+            <button 
+              class="tool-btn" 
+              :class="{ 'is-active': isIgnored }"
+              :title="isIgnored ? 'Unignore in Daily Digest' : 'Ignore in Daily Digest'" 
+              @click="toggleIgnore"
+            >
+              <EyeOff :size="16" />
             </button>
           </div>
         </div>
@@ -222,6 +252,12 @@ function handleForward() {
   background-color: var(--bg-secondary);
   border-color: var(--border-color);
   color: var(--text-primary);
+}
+
+.tool-btn.is-active {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .email-detail-container {

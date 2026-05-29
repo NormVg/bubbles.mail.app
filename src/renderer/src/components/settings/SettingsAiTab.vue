@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { appApiFetch } from '../../composables/useAppApi'
-import { RefreshCw, Cpu, AlertTriangle, ChevronDown } from '@lucide/vue'
+import { RefreshCw, Cpu, AlertTriangle, ChevronDown, X, Plus } from '@lucide/vue'
 
 const props = defineProps<{
   autoGenerateSummary: boolean
   autoDraftReplies: boolean
   customInstructions: string
-  ignoredDigestSenders: string
+  ignoredDigestSenders: string[]
   ollamaModel: string
   digestModel: string
   agentMaxSteps: number
@@ -62,6 +62,21 @@ function formatSize(bytes: number): string {
   if (!bytes) return '0 GB'
   const gb = bytes / (1024 * 1024 * 1024)
   return `${gb.toFixed(2)} GB`
+}
+
+const newIgnoreEmail = ref('')
+
+function addIgnoreEmail() {
+  const email = newIgnoreEmail.value.trim().toLowerCase()
+  if (!email) return
+  if (!props.ignoredDigestSenders.includes(email)) {
+    emit('update:ignoredDigestSenders', [...props.ignoredDigestSenders, email])
+  }
+  newIgnoreEmail.value = ''
+}
+
+function removeIgnoreEmail(email: string) {
+  emit('update:ignoredDigestSenders', props.ignoredDigestSenders.filter(e => e !== email))
 }
 </script>
 
@@ -237,15 +252,33 @@ function formatSize(bytes: number): string {
         <div class="setting-card-header-row">
           <div class="setting-card-left">
             <h4 class="setting-title">Digest Ignore List</h4>
-            <p class="setting-subtitle">Comma-separated list of keywords, emails, or domains to ignore when generating the Daily Intelligence digest (e.g., marketing, noreply@bank.com).</p>
+            <p class="setting-subtitle">Emails added here will be completely ignored when generating the Daily Intelligence digest.</p>
           </div>
         </div>
-        <textarea
-          class="custom-instructions-textarea"
-          :value="ignoredDigestSenders"
-          @input="emit('update:ignoredDigestSenders', ($event.target as HTMLTextAreaElement).value)"
-          placeholder="marketing, noreply, alerts, newsletters"
-        ></textarea>
+        
+        <div class="ignore-emails-container">
+          <div v-if="ignoredDigestSenders.length > 0" class="ignore-chips">
+            <div v-for="email in ignoredDigestSenders" :key="email" class="ignore-chip">
+              <span>{{ email }}</span>
+              <button class="remove-chip-btn" @click="removeIgnoreEmail(email)" title="Remove">
+                <X :size="12" />
+              </button>
+            </div>
+          </div>
+          
+          <div class="add-ignore-row">
+            <input 
+              type="text" 
+              class="add-ignore-input" 
+              v-model="newIgnoreEmail" 
+              @keydown.enter="addIgnoreEmail"
+              placeholder="Add email address..."
+            />
+            <button class="add-ignore-btn" @click="addIgnoreEmail" :disabled="!newIgnoreEmail.trim()">
+              <Plus :size="14" /> Add
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

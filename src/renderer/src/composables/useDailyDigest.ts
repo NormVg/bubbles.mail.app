@@ -95,10 +95,9 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     try {
       const { settings } = useSettings()
 
-      const ignoreList = (settings.value.ignoredDigestSenders || '')
-        .split(',')
-        .map(s => s.trim().toLowerCase())
-        .filter(s => s.length > 0)
+      const ignoreList = Array.isArray(settings.value.ignoredDigestSenders) 
+        ? settings.value.ignoredDigestSenders 
+        : []
 
       const filteredEmails = emails.filter(e => {
         if (ignoreList.length === 0) return true
