@@ -43,6 +43,10 @@ const customInstructions = computed({
   get: () => settings.value.customInstructions,
   set: (val) => settings.value.customInstructions = val
 })
+const ignoredDigestSenders = computed({
+  get: () => settings.value.ignoredDigestSenders,
+  set: (val) => settings.value.ignoredDigestSenders = val
+})
 
 const ollamaModel = computed({
   get: () => settings.value.ollamaModel,
@@ -108,6 +112,7 @@ function saveAllSettings() {
           v-model:autoGenerateSummary="autoGenerateSummary"
           v-model:autoDraftReplies="autoDraftReplies"
           v-model:customInstructions="customInstructions"
+          v-model:ignoredDigestSenders="ignoredDigestSenders"
           v-model:ollamaModel="ollamaModel"
           v-model:digestModel="digestModel"
           v-model:agentMaxSteps="agentMaxSteps"

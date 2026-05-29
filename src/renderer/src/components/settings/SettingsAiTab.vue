@@ -7,6 +7,7 @@ const props = defineProps<{
   autoGenerateSummary: boolean
   autoDraftReplies: boolean
   customInstructions: string
+  ignoredDigestSenders: string
   ollamaModel: string
   digestModel: string
   agentMaxSteps: number
@@ -16,6 +17,7 @@ const emit = defineEmits([
   'update:autoGenerateSummary',
   'update:autoDraftReplies',
   'update:customInstructions',
+  'update:ignoredDigestSenders',
   'update:ollamaModel',
   'update:digestModel',
   'update:agentMaxSteps'
@@ -227,6 +229,22 @@ function formatSize(bytes: number): string {
           :value="customInstructions"
           @input="emit('update:customInstructions', ($event.target as HTMLTextAreaElement).value)"
           placeholder="e.g. Always format responses in bullet points. Be extremely concise. Use professional tone."
+        ></textarea>
+      </div>
+
+      <!-- Ignored Digest Senders -->
+      <div class="setting-row-card column-layout">
+        <div class="setting-card-header-row">
+          <div class="setting-card-left">
+            <h4 class="setting-title">Digest Ignore List</h4>
+            <p class="setting-subtitle">Comma-separated list of keywords, emails, or domains to ignore when generating the Daily Intelligence digest (e.g., marketing, noreply@bank.com).</p>
+          </div>
+        </div>
+        <textarea
+          class="custom-instructions-textarea"
+          :value="ignoredDigestSenders"
+          @input="emit('update:ignoredDigestSenders', ($event.target as HTMLTextAreaElement).value)"
+          placeholder="marketing, noreply, alerts, newsletters"
         ></textarea>
       </div>
     </div>

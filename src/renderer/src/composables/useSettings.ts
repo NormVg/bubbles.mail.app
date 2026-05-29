@@ -4,6 +4,7 @@ export interface AiSettings {
   autoGenerateSummary: boolean
   autoDraftReplies: boolean
   customInstructions: string
+  ignoredDigestSenders: string
   ollamaModel: string
   digestModel: string
   sarvamApiKey: string
@@ -14,6 +15,7 @@ const DEFAULT_SETTINGS: AiSettings = {
   autoGenerateSummary: true,
   autoDraftReplies: true,
   customInstructions: 'Focus on minimal, Vercel-style, professional responses. Avoid fluff.',
+  ignoredDigestSenders: 'marketing, noreply, newsletters, notifications, alert, updates, no-reply',
   ollamaModel: '',
   digestModel: '',
   sarvamApiKey: '',

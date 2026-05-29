@@ -95,9 +95,20 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     try {
       const { settings } = useSettings()
 
+      const ignoreList = (settings.value.ignoredDigestSenders || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0)
+
+      const filteredEmails = emails.filter(e => {
+        if (ignoreList.length === 0) return true
+        const senderStr = `${e.sender} ${e.senderEmail}`.toLowerCase()
+        return !ignoreList.some(ignoreKw => senderStr.includes(ignoreKw))
+      })
+
       const payload = {
         model: settings.value.digestModel,
-        emails: emails.map(e => ({
+        emails: filteredEmails.map(e => ({
           id: e.id,
           sender: e.sender,
           subject: e.subject,
