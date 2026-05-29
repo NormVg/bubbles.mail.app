@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useMail } from '../composables/useMail'
 import { useDailyDigest } from '../composables/useDailyDigest'
 import { useComposeStore } from '../stores/useComposeStore'
@@ -46,13 +46,14 @@ function setSelectedDateKey(date: string) {
   setTimeout(() => {
     const firstMail = filteredEmails.value[0]
     setSelectedEmailId(firstMail ? firstMail.id : null)
-    
-    // Auto-generate AI digest if in digest mode
-    if (activeAccount.value && viewMode.value === 'digest') {
-      checkAndGenerateDigest(activeAccount.value, date, date, filteredEmails.value)
-    }
   }, 0)
 }
+
+watch([activeAccount, selectedDateKey, filteredEmails], ([acc, date, emails]) => {
+  if (viewMode.value === 'digest' && acc && date) {
+    checkAndGenerateDigest(acc, date, date, emails)
+  }
+}, { immediate: true })
 
 function handleInboxClick() {
   setViewMode('inbox')
@@ -83,10 +84,8 @@ onMounted(() => {
   void refreshGmailAccounts()
   window.addEventListener('focus', handleWindowFocus)
 
-  // Auto-select "Today" on startup if nothing is selected
-  if (!selectedDateKey.value) {
-    setSelectedDateKey('Today')
-  }
+  // Bootstrap the timeline selection on startup
+  setSelectedDateKey(selectedDateKey.value || 'Today')
 })
 
 onUnmounted(() => {

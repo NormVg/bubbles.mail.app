@@ -1,4 +1,4 @@
-import { and, desc, eq, like, lt, or } from 'drizzle-orm'
+import { and, desc, eq, like, lt, or, gt } from 'drizzle-orm'
 import { getDb } from '../../db/client'
 import { gmailAccounts, gmailMessages, gmailOauthStates, type GmailAccount, type NewGmailAccount, type NewGmailMessageRecord } from '../../db/schema'
 import { toStoredMessage } from './message'
@@ -160,8 +160,43 @@ export async function listStoredGmailMessages(options: {
   if (options.accountId) filters.push(eq(gmailMessages.accountId, options.accountId))
   if (options.before) filters.push(lt(gmailMessages.internalDate, new Date(options.before)))
   if (options.query?.trim()) {
-    const term = `%${options.query.trim()}%`
-    filters.push(or(like(gmailMessages.subject, term), like(gmailMessages.snippet, term), like(gmailMessages.fromEmail, term), like(gmailMessages.fromName, term)))
+    const regex = /(?:([a-zA-Z_]+):)?(?:"([^"]+)"|([^\s]+))/g;
+    let match;
+    while ((match = regex.exec(options.query.trim())) !== null) {
+      const field = match[1];
+      const value = match[2] || match[3];
+      
+      if (!value) continue;
+      
+      if (field === 'from') {
+         filters.push(or(like(gmailMessages.fromEmail, `%${value}%`), like(gmailMessages.fromName, `%${value}%`)))
+      } else if (field === 'subject') {
+         filters.push(like(gmailMessages.subject, `%${value}%`))
+      } else if (field === 'is' && value === 'unread') {
+         filters.push(eq(gmailMessages.isUnread, true))
+      } else if (field === 'is' && value === 'read') {
+         filters.push(eq(gmailMessages.isUnread, false))
+      } else if (field === 'is' && value === 'starred') {
+         filters.push(eq(gmailMessages.isStarred, true))
+      } else if (field === 'newer_than') {
+         const daysMatch = value.match(/^(\d+)d$/);
+         if (daysMatch) {
+           const days = parseInt(daysMatch[1], 10);
+           const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+           filters.push(gt(gmailMessages.internalDate, dateLimit));
+         }
+      } else if (field === 'older_than') {
+         const daysMatch = value.match(/^(\d+)d$/);
+         if (daysMatch) {
+           const days = parseInt(daysMatch[1], 10);
+           const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+           filters.push(lt(gmailMessages.internalDate, dateLimit));
+         }
+      } else {
+         const searchVal = `%${value}%`
+         filters.push(or(like(gmailMessages.subject, searchVal), like(gmailMessages.snippet, searchVal), like(gmailMessages.fromEmail, searchVal), like(gmailMessages.fromName, searchVal)))
+      }
+    }
   }
 
   const rows = await db

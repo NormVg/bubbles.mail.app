@@ -7,6 +7,7 @@ export interface AiSettings {
   ollamaModel: string
   digestModel: string
   sarvamApiKey: string
+  agentMaxSteps: number
 }
 
 const DEFAULT_SETTINGS: AiSettings = {
@@ -15,7 +16,8 @@ const DEFAULT_SETTINGS: AiSettings = {
   customInstructions: 'Focus on minimal, Vercel-style, professional responses. Avoid fluff.',
   ollamaModel: '',
   digestModel: '',
-  sarvamApiKey: ''
+  sarvamApiKey: '',
+  agentMaxSteps: 5
 }
 
 // Global state shared across the application

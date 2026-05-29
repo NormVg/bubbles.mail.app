@@ -266,9 +266,16 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
   const { readable, writable } = new TransformStream()
   const writer = writable.getWriter()
 
+  let parsedBody = {}
+  try {
+    parsedBody = typeof options?.body === 'string' ? JSON.parse(options.body) : (options?.body || {})
+  } catch (e) {
+    console.error('Failed to parse body:', e)
+  }
+
   window.electronAPI.streamApi(
     urlString,
-    { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
+    { headers: options?.headers, body: parsedBody },
     {
       onChunk: (chunk: any) => {
         if (typeof chunk === 'string') {

@@ -33,11 +33,13 @@ import { getSqliteConnection } from './db/client'
 import { listGmailAccounts, deleteGmailAccount } from './utils/gmail/repository'
 import { createGmailAuthUrl } from './utils/gmail/oauth'
 import { connectGmailAccountFromCallback, listCachedMessages, sendGmailMessage, syncGmailMessages, readGmailMessage, applyGmailMessageAction } from './utils/gmail/service'
+import { startImapWatcher, stopImapWatcher, setupAppLifecycle } from './utils/gmail/imap'
 
 import { ollama } from 'ai-sdk-ollama'
 import { streamText, generateText, Output } from 'ai'
 import { z } from 'zod'
 import { SarvamAIClient } from 'sarvamai'
+import { createChatStream } from './ai/agent'
 
 // We initialize SQLite database on app load
 getSqliteConnection()
@@ -735,77 +737,236 @@ You MUST strictly use the exact keys from the schema:
 
       if (path === '/api/ai/draft') {
         result = await streamText({
-          model: ollama(modelName, { think: true }),
+          model: ollama(modelName),
           system: 'You are an expert email drafting assistant. Draft professional, concise, and highly effective emails. Output the email subject on the first line prefixed with "Subject:", then a blank line, then the email body. Do not output any other conversational filler.',
           prompt: parsedBody.prompt,
-          abortSignal: controller.signal,
-          providerOptions: { ollama: { think: true } }
+          abortSignal: controller.signal
         })
       } else if (path === '/api/ai/reply') {
         console.log(`[Stream IPC] Starting reply generation for ${modelName}...`)
+        console.log(`[Stream IPC] Reply prompt: "${(parsedBody.prompt || '').substring(0, 100)}"`)
+        console.log(`[Stream IPC] Reply context length: ${(parsedBody.context || '').length}`)
+        console.log(`[Stream IPC] Reply system prompt length: ${(parsedBody.system || '').length}`)
         result = await streamText({
-          model: ollama(modelName, { think: true }),
+          model: ollama(modelName),
           system: parsedBody.system || 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.',
           prompt: `Context:\n${parsedBody.context}\n\nInstructions:\n${parsedBody.prompt}`,
-          abortSignal: controller.signal,
-          providerOptions: { ollama: { think: true } }
+          abortSignal: controller.signal
         })
+        console.log(`[Stream IPC] streamText() returned for /api/ai/reply. result type: ${typeof result}, has textStream: ${!!result?.textStream}`)
       } else if (path === '/api/ai/chat') {
-        console.log(`[Stream IPC] Starting chat generation for ${modelName}...`)
+        console.log(`[Stream IPC] Starting modular agent chat generation for ${modelName}...`)
+        
         const fullPrompt = parsedBody.history
           ? `${parsedBody.history}\n\nUser: ${parsedBody.prompt}`
           : parsedBody.prompt
           
-        if (parsedBody.images && parsedBody.images.length > 0) {
-          const content: any[] = [{ type: 'text', text: fullPrompt }]
-          for (const imgUrl of parsedBody.images) {
-            content.push({ type: 'image', image: new URL(imgUrl) })
+        const maxSteps = parsedBody.maxSteps || 5
+        const accountId = parsedBody.accountId
+        
+        console.log(`[Stream IPC] maxSteps resolved to: ${maxSteps} (from parsedBody.maxSteps: ${parsedBody.maxSteps})`)
+        
+        if (!accountId) {
+          console.warn('[Stream IPC] WARNING: No accountId provided to /api/ai/chat. Tools will not work correctly.')
+        }
+
+        const accounts = await listGmailAccounts()
+        const accountEmails = accounts.map(a => a.email).join(', ') || 'None connected'
+        const currentDateTime = new Date().toLocaleString()
+        
+        const contextAwareSystem = `ROLE:
+You are Bubbles AI, an expert, highly capable email assistant and agent.
+
+TASK:
+Your task is to assist the user in managing their inbox, searching for emails, reading threads, and drafting/staging email replies natively through your provided tools.
+
+CONTEXT:
+Current Date and Time: ${currentDateTime}
+Connected email accounts: ${accountEmails}
+If the user asks what emails you have access to, or asks you to search their emails without specifying, you can search across these accounts.
+${parsedBody.system && parsedBody.system !== 'You are Bubbles AI, a highly capable email assistant. You have tools to search, read, and manage emails. ALWAYS provide a clear text response to the user summarizing your actions after using tools.' ? `\nUser Custom Instructions: ${parsedBody.system}\n` : ''}
+
+CONSTRAINTS:
+- Do NOT explicitly mention the current date, time, or the list of connected accounts unless the user specifically asks or it is highly relevant.
+- When you decide to use a tool, you MUST ONLY output the tool call. DO NOT output any conversational text alongside the tool call.
+- After receiving a tool result, you MUST output a conversational text response summarizing the result. Do not stop without providing a final text answer.
+- Keep your tone professional, concise, and helpful.
+
+OUTPUT FORMAT:
+- Use clean, valid Markdown formatting.
+- Use headings and bullet points when summarizing multiple emails or data points.`
+
+        const initialMessages = parsedBody.images && parsedBody.images.length > 0
+          ? [{ role: 'user', content: [{ type: 'text', text: fullPrompt }, ...parsedBody.images.map((url: string) => ({ type: 'image', image: new URL(url) }))] }]
+          : [{ role: 'user', content: fullPrompt }]
+
+        let stepCount = 0
+        let isDone = false
+        const currentMessages = [...initialMessages]
+
+        console.log(`[Stream IPC] Starting manual agent loop (maxSteps: ${maxSteps})...`)
+        
+        while (stepCount < maxSteps && !isDone && !controller.signal.aborted) {
+          stepCount++
+          console.log(`[Stream IPC] --- Loop Step ${stepCount} ---`)
+          
+          const result = await createChatStream({
+            modelName,
+            system: contextAwareSystem,
+            messages: currentMessages,
+            accountId,
+            maxSteps: 1, // We force 1 step so Vercel doesn't prematurely terminate our manual loop
+            abortSignal: controller.signal
+          })
+
+          let stepHasToolCalls = false
+          let stepHasRealText = false
+          let insideThinkBlock = false
+          let textBuffer = '' // buffer to catch partial <think> / </think> tags
+          
+          for await (const part of result.fullStream) {
+            if (controller.signal.aborted) break
+            
+            if (part.type === 'tool-call') {
+              stepHasToolCalls = true
+              console.log(`[Stream IPC] Tool Call Raw Part:`, JSON.stringify(part, null, 2))
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'tool-call', toolName: part.toolName, args: (part as any).args || (part as any).input })
+            } else if (part.type === 'tool-result') {
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'tool-result', toolName: part.toolName, result: part.result })
+            } else if (part.type === 'text-delta') {
+              // Ollama sometimes leaks <think>...</think> inside text-delta chunks
+              let chunk = (part.textDelta || part.text || '')
+              textBuffer += chunk
+              
+              // Process the buffer for think tags
+              while (textBuffer.length > 0) {
+                if (insideThinkBlock) {
+                  const closeIdx = textBuffer.indexOf('</think>')
+                  if (closeIdx !== -1) {
+                    // Send everything before </think> as reasoning
+                    const reasoningText = textBuffer.substring(0, closeIdx)
+                    if (reasoningText) {
+                      event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: reasoningText })
+                    }
+                    textBuffer = textBuffer.substring(closeIdx + 8) // skip '</think>'
+                    insideThinkBlock = false
+                  } else {
+                    // Still inside think block, send all as reasoning and clear buffer
+                    // But keep last 8 chars in case </think> is split across chunks
+                    if (textBuffer.length > 8) {
+                      const safeLen = textBuffer.length - 8
+                      event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: textBuffer.substring(0, safeLen) })
+                      textBuffer = textBuffer.substring(safeLen)
+                    }
+                    break
+                  }
+                } else {
+                  const openIdx = textBuffer.indexOf('<think>')
+                  if (openIdx !== -1) {
+                    // Send everything before <think> as real text
+                    const realText = textBuffer.substring(0, openIdx)
+                    if (realText.trim()) {
+                      stepHasRealText = true
+                      event.sender.send(`stream-chunk-${streamId}`, { type: 'text', text: realText })
+                    }
+                    textBuffer = textBuffer.substring(openIdx + 7) // skip '<think>'
+                    insideThinkBlock = true
+                  } else {
+                    // No think tag — but keep last 7 chars in case <think> is split
+                    if (textBuffer.length > 7) {
+                      const safeLen = textBuffer.length - 7
+                      const realText = textBuffer.substring(0, safeLen)
+                      if (realText.trim()) {
+                        stepHasRealText = true
+                      }
+                      event.sender.send(`stream-chunk-${streamId}`, { type: 'text', text: realText })
+                      textBuffer = textBuffer.substring(safeLen)
+                    }
+                    break
+                  }
+                }
+              }
+            } else if (part.type === 'reasoning-delta') {
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: (part as any).textDelta || (part as any).text })
+            } else if (part.type === 'reasoning-start' || part.type === 'reasoning-end') {
+              // suppress — we only forward deltas
+            } else if (part.type === 'start') {
+              if (stepCount === 1) event.sender.send(`stream-chunk-${streamId}`, { type: 'start' })
+            } else if (part.type === 'start-step' || part.type === 'finish-step' || part.type === 'finish') {
+              // handled by our manual loop
+            }
           }
-          result = await streamText({
-            model: ollama(modelName, { think: true }),
-            system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
-            messages: [{ role: 'user', content }],
-            abortSignal: controller.signal,
-            providerOptions: { ollama: { think: true } }
-          })
-        } else {
-          result = await streamText({
-            model: ollama(modelName, { think: true }),
-            system: parsedBody.system || 'You are Bubbles AI, a helpful email assistant. Be concise, professional, and helpful.',
-            prompt: fullPrompt,
-            abortSignal: controller.signal,
-            providerOptions: { ollama: { think: true } }
-          })
-        }
-      } else {
-        throw new Error('Unknown streaming path')
-      }
+          
+          // Flush remaining text buffer
+          if (textBuffer.trim()) {
+            if (insideThinkBlock) {
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: textBuffer })
+            } else {
+              stepHasRealText = true
+              event.sender.send(`stream-chunk-${streamId}`, { type: 'text', text: textBuffer })
+            }
+          }
+          
+          if (controller.signal.aborted) break
 
-      console.log(`[Stream IPC] Stream started, waiting for fullStream parts...`)
-      for await (const part of result.fullStream) {
-        if (controller.signal.aborted) {
-          console.log(`[Stream IPC] Stream aborted by client.`)
-          break
+          try {
+            const response = await result.response
+            if (response && response.messages) {
+              currentMessages.push(...response.messages)
+            }
+          } catch (err: any) {
+            console.error('[Stream IPC] Error getting response messages for loop:', err)
+            // Throw the error so it propagates to the outer catch block and notifies the client
+            throw err
+          }
+
+          if (!stepHasToolCalls) {
+            isDone = true
+          } else if (stepHasRealText) {
+            // If the model generated real text AND tool calls, we shouldn't necessarily
+            // loop forever if it keeps doing that. But maxSteps will catch it.
+          }
         }
         
-        // DEBUG: Log the chunk type
-        console.log(`[Stream IPC] Received chunk type: ${part.type}`)
-        
-        if (part.type === 'reasoning-delta') {
-          event.sender.send(`stream-chunk-${streamId}`, { type: 'reasoning', text: part.textDelta || part.text })
-        } else if (part.type === 'text-delta') {
-          event.sender.send(`stream-chunk-${streamId}`, { type: 'text', text: part.textDelta || part.text })
-        }
-      }
-
-      if (!controller.signal.aborted) {
-        console.log(`[Stream IPC] Stream finished naturally.`)
         event.sender.send(`stream-finish-${streamId}`)
+        console.log(`[Stream IPC] Stream finished naturally after ${stepCount} steps.`)
+        return // Return early to avoid falling through to the draft/reply handler below
+      }
+
+      // Handle streamText results for draft and reply endpoints
+      if (result && result.textStream) {
+        console.log(`[Stream IPC] Starting textStream consumption for ${path}...`)
+        let chunkCount = 0
+        for await (const chunk of result.textStream) {
+          if (controller.signal.aborted) break
+          chunkCount++
+          event.sender.send(`stream-chunk-${streamId}`, chunk)
+        }
+        console.log(`[Stream IPC] textStream finished. Sent ${chunkCount} chunks.`)
+        if (!controller.signal.aborted) {
+          event.sender.send(`stream-finish-${streamId}`)
+        }
+      } else if (!result) {
+        throw new Error(`Unknown streaming path: ${path}`)
       }
     } catch (err: any) {
-      console.error(`[Stream IPC] Error caught:`, err.message)
+      console.error(`[Stream IPC] Error caught:`, err)
       if (err.name !== 'AbortError') {
-        event.sender.send(`stream-error-${streamId}`, err.message)
+        let errorMsg = err.message
+        if (!errorMsg) {
+          try {
+            errorMsg = typeof err === 'object' ? JSON.stringify(err) : String(err)
+          } catch (e) {
+            errorMsg = String(err)
+          }
+        }
+        
+        // Prevent sending an object if something weird happens
+        if (typeof errorMsg !== 'string') {
+          errorMsg = String(errorMsg)
+        }
+        
+        event.sender.send(`stream-error-${streamId}`, errorMsg)
       }
     } finally {
       activeStreams.delete(streamId)

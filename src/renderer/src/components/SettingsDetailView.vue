@@ -52,6 +52,10 @@ const digestModel = computed({
   get: () => settings.value.digestModel,
   set: (val) => settings.value.digestModel = val
 })
+const agentMaxSteps = computed({
+  get: () => settings.value.agentMaxSteps,
+  set: (val) => settings.value.agentMaxSteps = Number(val)
+})
 const sarvamApiKey = computed({
   get: () => settings.value.sarvamApiKey,
   set: (val) => settings.value.sarvamApiKey = val
@@ -106,6 +110,7 @@ function saveAllSettings() {
           v-model:customInstructions="customInstructions"
           v-model:ollamaModel="ollamaModel"
           v-model:digestModel="digestModel"
+          v-model:agentMaxSteps="agentMaxSteps"
         />
 
         <SettingsSecurityTab

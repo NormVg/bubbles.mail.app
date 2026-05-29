@@ -48,166 +48,168 @@ function viewSourceEmail(emailId: string) {
 </script>
 
 <template>
-  <div v-if="isGeneratingDigest" class="daily-digest digest-empty animate-fade-in" style="padding: 0; display: flex; flex-direction: column;">
-    <div class="canvas-card">
-      <div class="full-matrix-bg">
-        <div 
-          class="matrix-cube" 
-          v-for="i in 800" 
-          :key="i"
-          :style="{ animationDelay: `-${matrixDelays[i-1]}s` }"
-        ></div>
-      </div>
-      <div class="canvas-content">
-        <h3 class="canvas-title">Analyzing your emails...</h3>
-        <p class="canvas-subtitle">Bubbles is generating your daily intelligence report. This usually takes 10-30 seconds depending on your AI model.</p>
-      </div>
-    </div>
-  </div>
-
-  <div v-else-if="selectedReport" class="daily-digest animate-fade-in">
-    <!-- Date Header -->
-    <div class="digest-header">
-      <div class="digest-header-left">
-        <span class="digest-meta"><Sparkles :size="14" /> Daily summary</span>
-        <h3 class="digest-date">{{ selectedReport.dateFormatted }}</h3>
-      </div>
-      <div class="digest-header-actions">
-        <button class="view-emails-btn flex-center" @click="triggerRegeneration" title="Regenerate digest">
-          <RefreshCw :size="12" style="margin-right: 4px;" /> Regenerate
-        </button>
-        <button class="view-emails-btn flex-center" @click="setViewMode('inbox')" title="View all emails for this day">
-          View emails &rarr;
-        </button>
+  <Transition name="digest-fade" mode="out-in" appear>
+    <div v-if="isGeneratingDigest" key="generating" class="daily-digest digest-empty" style="padding: 0; display: flex; flex-direction: column;">
+      <div class="canvas-card">
+        <div class="full-matrix-bg">
+          <div 
+            class="matrix-cube" 
+            v-for="i in 800" 
+            :key="i"
+            :style="{ animationDelay: `-${matrixDelays[i-1]}s` }"
+          ></div>
+        </div>
+        <div class="canvas-content">
+          <h3 class="canvas-title">Analyzing your emails...</h3>
+          <p class="canvas-subtitle">Bubbles is generating your daily intelligence report. This usually takes 10-30 seconds depending on your AI model.</p>
+        </div>
       </div>
     </div>
 
-    <!-- Section 1: Executive Summary Card -->
-    <div class="digest-section">
-      <h4 class="section-heading">Executive Summary</h4>
-      <div class="summary-card">
-        <ul class="summary-list">
-          <li v-for="(bullet, index) in selectedReport.summary" :key="index" class="summary-item">
-            {{ bullet }}
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <!-- Section 2: Extracted Tasks Checklist -->
-    <div class="digest-section">
-      <div class="section-header-row">
-        <h4 class="section-heading">Actionable Tasks</h4>
-        <span class="heading-counter">{{ selectedReport.tasks.filter(t => !t.completed).length }} pending</span>
-      </div>
-      <div class="tasks-card">
-        <div 
-          v-for="task in selectedReport.tasks" 
-          :key="task.id" 
-          class="task-row"
-          :class="{ 'completed': task.completed }"
-        >
-          <label class="task-checkbox-container">
-            <input 
-              type="checkbox" 
-              :checked="task.completed" 
-              @change="toggleTask(task.id)"
-              class="task-checkbox"
-            />
-            <span class="checkmark"></span>
-            <span class="task-text">{{ task.text }}</span>
-          </label>
-          
-          <!-- Source Traceability button -->
-          <button 
-            class="trace-btn" 
-            title="View source email"
-            @click="viewSourceEmail(task.sourceEmailId)"
-          >
-            <svg class="trace-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-            </svg>
+    <div v-else-if="selectedReport" key="report" class="daily-digest">
+      <!-- Date Header -->
+      <div class="digest-header">
+        <div class="digest-header-left">
+          <span class="digest-meta"><Sparkles :size="14" /> Daily summary</span>
+          <h3 class="digest-date">{{ selectedReport.dateFormatted }}</h3>
+        </div>
+        <div class="digest-header-actions">
+          <button class="view-emails-btn flex-center" @click="triggerRegeneration" title="Regenerate digest">
+            <RefreshCw :size="12" style="margin-right: 4px;" /> Regenerate
+          </button>
+          <button class="view-emails-btn flex-center" @click="setViewMode('inbox')" title="View all emails for this day">
+            View emails &rarr;
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Section 3: Deadlines Alert List -->
-    <div v-if="selectedReport.deadlines.length > 0" class="digest-section">
-      <h4 class="section-heading">Time-Sensitive Deadlines</h4>
-      <div class="deadlines-list">
-        <div 
-          v-for="deadline in selectedReport.deadlines" 
-          :key="deadline.id" 
-          class="deadline-item-card"
-          :class="`deadline-${deadline.urgency}`"
-        >
-          <div class="deadline-left">
-            <span class="deadline-badge">{{ deadline.urgency }}</span>
-            <span class="deadline-text">{{ deadline.text }}</span>
-          </div>
-          <button 
-            class="trace-btn" 
-            title="View source email"
-            @click="viewSourceEmail(deadline.sourceEmailId)"
+      <!-- Section 1: Executive Summary Card -->
+      <div class="digest-section">
+        <h4 class="section-heading">Executive Summary</h4>
+        <div class="summary-card">
+          <ul class="summary-list">
+            <li v-for="(bullet, index) in selectedReport.summary" :key="index" class="summary-item">
+              {{ bullet }}
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Section 2: Extracted Tasks Checklist -->
+      <div class="digest-section">
+        <div class="section-header-row">
+          <h4 class="section-heading">Actionable Tasks</h4>
+          <span class="heading-counter">{{ selectedReport.tasks.filter(t => !t.completed).length }} pending</span>
+        </div>
+        <div class="tasks-card">
+          <div 
+            v-for="task in selectedReport.tasks" 
+            :key="task.id" 
+            class="task-row"
+            :class="{ 'completed': task.completed }"
           >
-            <svg class="trace-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 4: Key Thread Conversations -->
-    <div class="digest-section">
-      <h4 class="section-heading">Important Threads</h4>
-      <div class="threads-feed">
-        <div 
-          v-for="thread in selectedReport.threads" 
-          :key="thread.id" 
-          class="thread-card interactive-item"
-          @click="viewSourceEmail(thread.sourceEmailId)"
-        >
-          <div class="thread-header">
-            <span class="thread-who">{{ thread.who }}</span>
-            <span class="thread-status-tag">{{ thread.status }}</span>
-          </div>
-          <h5 class="thread-topic">{{ thread.topic }}</h5>
-          <p class="thread-body">{{ thread.summary }}</p>
-          <div class="thread-footer">
-            <span class="view-trace-link">View source email &rarr;</span>
+            <label class="task-checkbox-container">
+              <input 
+                type="checkbox" 
+                :checked="task.completed" 
+                @change="toggleTask(task.id)"
+                class="task-checkbox"
+              />
+              <span class="checkmark"></span>
+              <span class="task-text">{{ task.text }}</span>
+            </label>
+            
+            <!-- Source Traceability button -->
+            <button 
+              class="trace-btn" 
+              title="View source email"
+              @click="viewSourceEmail(task.sourceEmailId)"
+            >
+              <svg class="trace-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Section 5: Daily Insights -->
-    <div class="digest-section">
-      <h4 class="section-heading">Observations & insights</h4>
-      <div class="insights-container">
-        <div 
-          v-for="(insight, index) in selectedReport.insights" 
-          :key="index" 
-          class="insight-pill"
-        >
-          <span class="insight-spark"><Lightbulb :size="14" /></span>
-          <span class="insight-content">{{ insight }}</span>
+      <!-- Section 3: Deadlines Alert List -->
+      <div v-if="selectedReport.deadlines.length > 0" class="digest-section">
+        <h4 class="section-heading">Time-Sensitive Deadlines</h4>
+        <div class="deadlines-list">
+          <div 
+            v-for="deadline in selectedReport.deadlines" 
+            :key="deadline.id" 
+            class="deadline-item-card"
+            :class="`deadline-${deadline.urgency}`"
+          >
+            <div class="deadline-left">
+              <span class="deadline-badge">{{ deadline.urgency }}</span>
+              <span class="deadline-text">{{ deadline.text }}</span>
+            </div>
+            <button 
+              class="trace-btn" 
+              title="View source email"
+              @click="viewSourceEmail(deadline.sourceEmailId)"
+            >
+              <svg class="trace-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Key Thread Conversations -->
+      <div class="digest-section">
+        <h4 class="section-heading">Important Threads</h4>
+        <div class="threads-feed">
+          <div 
+            v-for="thread in selectedReport.threads" 
+            :key="thread.id" 
+            class="thread-card interactive-item"
+            @click="viewSourceEmail(thread.sourceEmailId)"
+          >
+            <div class="thread-header">
+              <span class="thread-who">{{ thread.who }}</span>
+              <span class="thread-status-tag">{{ thread.status }}</span>
+            </div>
+            <h5 class="thread-topic">{{ thread.topic }}</h5>
+            <p class="thread-body">{{ thread.summary }}</p>
+            <div class="thread-footer">
+              <span class="view-trace-link">View source email &rarr;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: Daily Insights -->
+      <div class="digest-section">
+        <h4 class="section-heading">Observations & insights</h4>
+        <div class="insights-container">
+          <div 
+            v-for="(insight, index) in selectedReport.insights" 
+            :key="index" 
+            class="insight-pill"
+          >
+            <span class="insight-spark"><Lightbulb :size="14" /></span>
+            <span class="insight-content">{{ insight }}</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div v-else class="daily-digest digest-empty animate-fade-in">
-    <div class="empty-card">
-      <span class="empty-icon flex-center"><Sparkles :size="16" /></span>
-      <h3>No digest for this day yet</h3>
-      <p>Sync your real inbox first, then select a day with messages to build intelligence from actual email data.</p>
-      <button class="view-emails-btn flex-center" @click="setViewMode('inbox')">
-        View inbox &rarr;
-      </button>
+    <div v-else key="empty" class="daily-digest digest-empty">
+      <div class="empty-card">
+        <span class="empty-icon flex-center"><Sparkles :size="16" /></span>
+        <h3>No digest for this day yet</h3>
+        <p>Sync your real inbox first, then select a day with messages to build intelligence from actual email data.</p>
+        <button class="view-emails-btn flex-center" @click="setViewMode('inbox')">
+          View inbox &rarr;
+        </button>
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -700,8 +702,9 @@ function viewSourceEmail(emailId: string) {
   width: 100%;
   height: 100%;
   background-color: var(--primary-color);
-  border-radius: 1px;
-  animation: data-process 2s ease-in-out infinite alternate;
+  border-radius: 2px;
+  animation: data-process 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  will-change: transform, opacity;
 }
 
 .canvas-content {
@@ -710,12 +713,12 @@ function viewSourceEmail(emailId: string) {
   background-color: var(--bg-primary);
   /* Glassmorphism for the floating card */
   background: var(--bg-glass, rgba(255, 255, 255, 0.6));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 24px 28px;
-  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 28px 32px;
+  border-radius: 20px;
   border: 1px solid var(--border-color);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
 }
 
 .canvas-title {
@@ -735,7 +738,23 @@ function viewSourceEmail(emailId: string) {
 }
 
 @keyframes data-process {
-  0% { opacity: 0.02; transform: scale(0.5); }
-  100% { opacity: 0.5; transform: scale(1.2); box-shadow: 0 0 6px var(--primary-color); }
+  0% { opacity: 0.05; transform: scale(0.6); }
+  100% { opacity: 0.7; transform: scale(1.3); box-shadow: 0 0 8px var(--primary-color); }
+}
+
+/* Custom Digest State Transitions */
+.digest-fade-enter-active,
+.digest-fade-leave-active {
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.digest-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+}
+
+.digest-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.98);
 }
 </style>

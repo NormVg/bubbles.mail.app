@@ -643,6 +643,12 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
   flex: 1;
   overflow-y: auto;
   background-color: var(--bg-primary);
+  /* Hide scrollbar */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.list-scroll-area::-webkit-scrollbar {
+  display: none;
 }
 
 /* ── Active Physics ──────────────────────────────────────────────────────── */

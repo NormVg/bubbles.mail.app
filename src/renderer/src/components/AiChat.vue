@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
-import { Sparkles, X, Copy, Check, Brain, ChevronDown } from '@lucide/vue'
+import { Sparkles, X, Copy, Check, Brain, ChevronDown, RefreshCw } from '@lucide/vue'
 import { useAiAssistant } from '../composables/useAiAssistant'
 import { useMail } from '../composables/useMail'
 import AiInputBox from './common/AiInputBox.vue'
@@ -9,8 +9,8 @@ import { Markdown } from 'vue-stream-markdown'
 import 'vue-stream-markdown/index.css'
 import 'vue-stream-markdown/theme.css'
 
-const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails, stopGeneration } = useAiAssistant()
-const { viewMode, selectedEmailId } = useMail()
+const { messages, isThinking, getSuggestedActions, sendMessage, activeContextEmails, stopGeneration, saveState } = useAiAssistant()
+const { viewMode, selectedEmailId, activeAccount, gmailAccounts } = useMail()
 
 const openReasonings = ref<Record<string, boolean>>({})
 
@@ -43,6 +43,55 @@ interface AttachedFile {
 
 const attachedFiles = ref<AttachedFile[]>([])
 const copiedMessageId = ref<string | null>(null)
+const sendingBulkId = ref<string | null>(null)
+
+const sendBulkEmails = async (emails: any[], msgId: string, toolIdx: number) => {
+  if (!emails || emails.length === 0) return
+  sendingBulkId.value = `${msgId}-${toolIdx}`
+  
+  try {
+    const activeGmailAccount = gmailAccounts.value.find(a => a.email === activeAccount.value)
+    const globalAccountId = activeContextEmails.value[0]?.gmailAccountId || activeGmailAccount?.id
+    
+    // Send each one via API
+    for (const email of emails) {
+      // Ensure 'to' is converted to an array if the model passed a string
+      const rawTo = email.to || email.recipient
+      const toAddresses = Array.isArray(rawTo) ? rawTo : [rawTo].filter(Boolean)
+      
+      let targetAccountId = globalAccountId
+      if (email.from) {
+        const matchingAccount = gmailAccounts.value.find(a => a.email.toLowerCase() === email.from.toLowerCase())
+        if (matchingAccount) {
+          targetAccountId = matchingAccount.id
+        }
+      }
+      
+      await (window as any).electronAPI.invokeApi('/api/gmail/send', {
+        method: 'POST',
+        body: {
+          accountId: email.accountId || targetAccountId,
+          to: toAddresses,
+          subject: email.subject,
+          bodyText: email.bodyText || email.body || '',
+          inReplyTo: email.inReplyTo,
+          threadId: email.threadId
+        }
+      })
+    }
+    
+    // Mark as sent in UI
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg && msg.toolCalls && msg.toolCalls[toolIdx]) {
+      msg.toolCalls[toolIdx].result = { ...(msg.toolCalls[toolIdx].result || {}), sent: true }
+      saveState()
+    }
+  } catch (e: any) {
+    console.error('Failed to bulk send:', e)
+  } finally {
+    sendingBulkId.value = null
+  }
+}
 
 const { isRecording, isTranscribing, audioLevel, startVoiceDictation, stopVoiceDictation } = useDictation((result) => {
   inputMessage.value = result
@@ -143,6 +192,56 @@ onMounted(() => {
                   <div class="reasoning-body">
                     <Markdown :content="msg.reasoning" />
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="ai-tools-list">
+              <div v-for="(tool, idx) in msg.toolCalls" :key="idx" class="ai-tool-item">
+                <div v-if="tool.name === 'stageEmailsForSending'" class="staged-emails-card">
+                  <div class="staged-emails-header">
+                    <h4>Staged Emails</h4>
+                    <span class="staged-count">{{ tool.args?.emails?.length || 0 }} emails ready</span>
+                  </div>
+                  <div class="staged-emails-body">
+                    <div v-for="(email, eIdx) in tool.args?.emails" :key="eIdx" class="staged-email-preview">
+                      <div class="staged-row">
+                        <span class="staged-label">From:</span>
+                        <select v-model="email.from" class="staged-select">
+                          <option :value="undefined">Auto ({{ activeAccount }})</option>
+                          <option v-for="account in gmailAccounts" :key="account.id" :value="account.email">
+                            {{ account.email }}
+                          </option>
+                          <option v-if="!gmailAccounts.length" value="" disabled>No accounts connected</option>
+                        </select>
+                      </div>
+                      <div class="staged-row">
+                        <span class="staged-label">To:</span>
+                        <span v-if="(email.to && email.to.length > 0) || email.recipient" class="staged-value">
+                          {{ Array.isArray(email.to || email.recipient) ? (email.to || email.recipient).join(', ') : (email.to || email.recipient) }}
+                        </span>
+                        <span v-else class="text-error staged-value">Missing recipient</span>
+                      </div>
+                      <div class="staged-row">
+                        <span class="staged-label">Subject:</span>
+                        <span class="staged-value font-medium">{{ email.subject }}</span>
+                      </div>
+                      <div class="staged-body-preview">
+                        {{ email.bodyText || email.body || '(No body content)' }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="staged-emails-footer">
+                    <button class="approve-all-btn" @click="sendBulkEmails(tool.args?.emails, msg.id, idx)" :disabled="tool.result?.sent || sendingBulkId === `${msg.id}-${idx}`">
+                      <RefreshCw v-if="sendingBulkId === `${msg.id}-${idx}`" :size="14" class="spin-icon" />
+                      <Check v-else :size="14" />
+                      {{ tool.result?.sent ? 'Sent All' : (sendingBulkId === `${msg.id}-${idx}` ? 'Sending...' : 'Approve & Send All') }}
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="generic-tool-card">
+                  <span class="tool-status-dot" :class="tool.status"></span>
+                  <span class="tool-name">Agent used <code>{{ tool.name }}</code></span>
                 </div>
               </div>
             </div>
@@ -278,6 +377,12 @@ onMounted(() => {
 
 .welcome-copy {
   text-align: center;
+}
+
+.text-error {
+  color: #ef4444;
+  font-style: italic;
+  font-weight: 500;
 }
 
 .welcome-title {
@@ -739,6 +844,181 @@ onMounted(() => {
   font-size: 0.8rem;
   color: var(--text-secondary);
   background-color: transparent;
+}
+
+.ai-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.generic-tool-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-secondary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.tool-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #f5a623;
+}
+.tool-status-dot.completed {
+  background-color: #10b981;
+}
+
+.staged-emails-card {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.staged-emails-header {
+  padding: 14px 18px;
+  background-color: transparent;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.staged-emails-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.staged-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.staged-emails-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.staged-email-preview {
+  padding: 0 0 20px 0;
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.staged-email-preview:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.staged-row {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.staged-label {
+  width: 70px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.staged-value {
+  color: var(--text-primary);
+  flex-grow: 1;
+  word-break: break-word;
+  font-weight: 500;
+}
+
+.staged-select {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  outline: none;
+  width: 100%;
+  max-width: 280px;
+  transition: border-color var(--transition-fast);
+}
+.staged-select:focus {
+  border-color: var(--primary-color);
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.staged-body-preview {
+  margin-top: 8px;
+  padding: 4px 0 4px 14px;
+  background-color: transparent;
+  border-radius: 0;
+  border: none;
+  border-left: 2px solid var(--border-color);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+[data-theme='dark'] .staged-body-preview {
+  background-color: transparent;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.staged-emails-footer {
+  padding: 14px 18px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.approve-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.approve-all-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.approve-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @keyframes fade-in-up {

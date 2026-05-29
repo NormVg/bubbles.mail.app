@@ -160,6 +160,8 @@ export const useDigestStore = defineStore('dailyDigest', () => {
     }
 
     if (!report || (report.latestEmailTimestamp || 0) < latestEmailTimestamp) {
+      // Prevent overlapping generations for the exact same date
+      if (isGeneratingDigest.value && selectedDateKey.value === dateKey) return
       await generateDigest(accountId, dateKey, dateFormatted, emailsForDay)
     }
   }

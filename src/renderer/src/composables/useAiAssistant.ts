@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { Email } from './useMail'
+import { useMailStore } from './useMail'
 import { useSettings } from './useSettings'
 
 export interface Message {
@@ -10,6 +11,7 @@ export interface Message {
   timestamp: Date
   contextEmails?: { id: string; subject: string }[]
   images?: string[]
+  toolCalls?: { name: string; args: any; status: 'running' | 'completed'; result?: any }[]
 }
 
 export interface ChatSession {
@@ -29,7 +31,7 @@ const initialSessions: ChatSession[] = [
       {
         id: 'm1',
         sender: 'ai',
-        text: `Hello Alicia! How can I help you manage your inbox or draft responses today?`,
+        text: `Hello! How can I help you manage your inbox or draft responses today?`,
         timestamp: new Date(Date.now() - 600000)
       }
     ]
@@ -121,7 +123,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
 
     // System context without auto-injected emails, unless EXPLICITLY set by user
     let systemContext = 'You are Bubbles AI, a helpful, concise, and professional email assistant.'
-    
+
     const { settings } = useSettings()
     if (settings.value.customInstructions) {
       systemContext += `\n\nUSER CUSTOM INSTRUCTIONS (MUST FOLLOW):\n${settings.value.customInstructions}`
@@ -147,6 +149,8 @@ export const useAiStore = defineStore('aiAssistant', () => {
       id: aiMsgId,
       sender: 'ai',
       text: '',
+      reasoning: '',
+      toolCalls: [],
       timestamp: new Date()
     })
 
@@ -161,6 +165,16 @@ export const useAiStore = defineStore('aiAssistant', () => {
     }
 
     try {
+      // Get accountId from the mail Pinia store — DOM query never works
+      const mailStore = useMailStore()
+      const activeGmailAccount = mailStore.gmailAccounts.find(
+        (a: any) => a.email === mailStore.activeAccount
+      )
+      const currentAccountId = activeContextEmails.value[0]?.gmailAccountId ||
+                              activeGmailAccount?.id ||
+                              mailStore.gmailAccounts[0]?.id ||
+                              null
+
       await new Promise<void>((resolve, reject) => {
         abortCurrentStream = window.electronAPI.streamApi(
           '/api/ai/chat',
@@ -170,22 +184,38 @@ export const useAiStore = defineStore('aiAssistant', () => {
               prompt: text,
               system: systemContext,
               history: conversationHistory,
-              images: images.length > 0 ? images : undefined
+              images: images.length > 0 ? images : undefined,
+              maxSteps: settings.value.agentMaxSteps || 5,
+              accountId: currentAccountId
             }
           },
           {
             onChunk: (chunk: any) => {
-              isThinking.value = false
               const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
-              if (aiMsg) {
-                if (typeof chunk === 'string') {
-                  aiMsg.text += chunk
-                } else if (chunk.type === 'reasoning') {
-                  aiMsg.reasoning = (aiMsg.reasoning || '') + (chunk.text || '')
-                } else if (chunk.type === 'text') {
-                  aiMsg.text += (chunk.text || '')
+              if (!aiMsg) return
+
+              if (typeof chunk === 'string') {
+                isThinking.value = false
+                aiMsg.text += chunk
+              } else if (chunk.type === 'reasoning') {
+                // Keep isThinking true — reasoning is internal, user sees the collapsible
+                aiMsg.reasoning = (aiMsg.reasoning || '') + (chunk.text || '')
+              } else if (chunk.type === 'text') {
+                isThinking.value = false
+                aiMsg.text += (chunk.text || '')
+              } else if (chunk.type === 'tool-call') {
+                // Keep isThinking true — tool is executing
+                if (!aiMsg.toolCalls) aiMsg.toolCalls = []
+                aiMsg.toolCalls.push({ name: chunk.toolName, args: chunk.args, status: 'running' })
+              } else if (chunk.type === 'tool-result') {
+                // Mark tool as completed but keep thinking — agent will loop
+                if (aiMsg.toolCalls) {
+                  const tc = aiMsg.toolCalls.find((t: any) => t.name === chunk.toolName && t.status === 'running')
+                  if (tc) {
+                    tc.status = 'completed'
+                    tc.result = chunk.result
+                  }
                 }
-                // Throttle saving chunks to prevent IO bottleneck, save on finish anyway
               }
             },
             onFinish: () => {
@@ -195,7 +225,10 @@ export const useAiStore = defineStore('aiAssistant', () => {
             },
             onError: (err: any) => {
               const aiMsg = activeSess.messages.find(m => m.id === aiMsgId)
-              if (aiMsg) aiMsg.text = `⚠️ Error: ${err}`
+              if (aiMsg) {
+                const errorStr = typeof err === 'object' ? JSON.stringify(err) : String(err)
+                aiMsg.text += `\n\n> ⚠️ **Error:** ${errorStr}`
+              }
               isThinking.value = false
               saveState()
               abortCurrentStream = null
@@ -231,7 +264,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
         {
           id: `m_${Date.now()}`,
           sender: 'ai',
-          text: `Hello Alicia! How can I help you manage your inbox or draft responses today?`,
+          text: `Hello! How can I help you manage your inbox or draft responses today?`,
           timestamp: new Date()
         }
       ]
@@ -263,7 +296,7 @@ export const useAiStore = defineStore('aiAssistant', () => {
         {
           id: `m_${Date.now()}`,
           sender: 'ai',
-          text: `Hello Alicia! Let's start fresh. How can I help you manage your inbox or draft responses today?`,
+          text: `Hello! Let's start fresh. How can I help you manage your inbox or draft responses today?`,
           timestamp: new Date()
         }
       ]
@@ -279,10 +312,10 @@ export const useAiStore = defineStore('aiAssistant', () => {
     activeContextEmails,
     getSuggestedActions,
     sendMessage,
-    createNewSession,
     deleteSession,
     clearChat,
-    stopGeneration
+    stopGeneration,
+    saveState
   }
 })
 
@@ -295,6 +328,7 @@ export function useAiAssistant() {
     sendMessage: store.sendMessage,
     createNewSession: store.createNewSession,
     deleteSession: store.deleteSession,
-    clearChat: store.clearChat
+    clearChat: store.clearChat,
+    saveState: store.saveState
   }
 }

@@ -9,6 +9,7 @@ const props = defineProps<{
   customInstructions: string
   ollamaModel: string
   digestModel: string
+  agentMaxSteps: number
 }>()
 
 const emit = defineEmits([
@@ -16,7 +17,8 @@ const emit = defineEmits([
   'update:autoDraftReplies',
   'update:customInstructions',
   'update:ollamaModel',
-  'update:digestModel'
+  'update:digestModel',
+  'update:agentMaxSteps'
 ])
 
 const models = ref<{ name: string; size: number }[]>([])
@@ -144,6 +146,29 @@ function formatSize(bytes: number): string {
               >
                 {{ model.name }} ({{ formatSize(model.size) }})
               </option>
+            </select>
+            <ChevronDown :size="14" class="select-arrow" />
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row-card column-layout">
+        <div class="setting-card-header-row">
+          <div class="setting-card-left">
+            <h4 class="setting-title">Agent Max Steps</h4>
+            <p class="setting-subtitle">Configure how many sequential actions (e.g. searching, reading) the AI agent can take before returning to you.</p>
+          </div>
+        </div>
+
+        <div class="model-select-wrapper">
+          <div class="select-container">
+            <Cpu :size="16" class="select-icon" />
+            <select
+              :value="agentMaxSteps"
+              @change="emit('update:agentMaxSteps', Number(($event.target as HTMLInputElement).value))"
+              class="premium-select"
+            >
+              <option v-for="n in 20" :key="n" :value="n">{{ n }} step{{ n > 1 ? 's' : '' }}</option>
             </select>
             <ChevronDown :size="14" class="select-arrow" />
           </div>

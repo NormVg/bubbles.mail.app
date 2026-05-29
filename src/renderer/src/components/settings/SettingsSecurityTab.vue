@@ -51,12 +51,11 @@ const showSarvamApiKey = ref(false)
         <h4 class="setting-title">Workspace Data Privacy</h4>
         <p class="setting-subtitle">All email scanning, summaries, and action item checklists are computed inside your safe workspace. No data is stored externally.</p>
       </div>
-      <span class="status-shield flex-center"><Check :size="12" /> Encrypted</span>
     </div>
 
     <div class="alert-box">
       <AlertCircle :size="16" class="alert-icon" />
-      <p class="alert-text">Bubbles utilizes secure local-only IPC boundaries. All emails from Alicia's workspace are handled contextually with sandboxed LLM processors.</p>
+      <p class="alert-text">Bubbles utilizes secure local-only IPC boundaries. All emails from your workspace are handled contextually with sandboxed LLM processors.</p>
     </div>
   </div>
 </template>

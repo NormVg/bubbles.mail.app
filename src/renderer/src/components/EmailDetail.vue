@@ -185,14 +185,24 @@ function stopDictation() {
 
 const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Promise<Response> => {
   const urlString = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url
+  console.log('[EmailDetail] ipcStreamFetch called for:', urlString)
   const { readable, writable } = new TransformStream()
   const writer = writable.getWriter()
 
+  let parsedBody = {}
+  try {
+    parsedBody = typeof options?.body === 'string' ? JSON.parse(options.body) : (options?.body || {})
+  } catch (e) {
+    console.error('[EmailDetail] Failed to parse body:', e)
+  }
+  console.log('[EmailDetail] Sending body keys:', Object.keys(parsedBody))
+
   window.electronAPI.streamApi(
     urlString,
-    { headers: options?.headers, body: JSON.parse((options?.body as string) || '{}') },
+    { headers: options?.headers, body: parsedBody },
     {
       onChunk: (chunk: any) => {
+        console.log('[EmailDetail] onChunk received:', typeof chunk, typeof chunk === 'string' ? chunk.substring(0, 80) : chunk)
         if (typeof chunk === 'string') {
           writer.write(new TextEncoder().encode(chunk))
         } else if (chunk.type === 'text') {
@@ -200,11 +210,11 @@ const ipcStreamFetch = (url: string | URL | Request, options?: RequestInit): Pro
         }
       },
       onFinish: () => {
-        console.log('[EmailDetail] Streaming finished.')
+        console.log('[EmailDetail] onFinish called - closing writer')
         writer.close()
       },
       onError: (err: any) => {
-        console.error('[EmailDetail] Streaming error:', err)
+        console.error('[EmailDetail] onError called:', err)
         writer.abort(err)
       }
     }
@@ -220,19 +230,21 @@ const { completion: aiCompletion, complete: completeAiDraft } = useCompletion({
   streamProtocol: 'text',
   fetch: ipcStreamFetch,
   onFinish: () => {
+    console.log('[EmailDetail] useCompletion onFinish - setting draftState to drafted')
     draftState.value = 'drafted'
     nextTick(() => {
       if (draftTextareaRef.value) draftTextareaRef.value.scrollTop = draftTextareaRef.value.scrollHeight
     })
   },
   onError: (err) => {
-    console.error('Draft generation error:', err)
+    console.error('[EmailDetail] useCompletion onError:', err)
     draftState.value = 'empty'
   }
 })
 
 watch(aiCompletion, (newVal) => {
   if (draftState.value === 'generating') {
+    console.log('[EmailDetail] aiCompletion updated, length:', newVal.length)
     generatedDraft.value = newVal
     nextTick(() => {
       if (draftTextareaRef.value) draftTextareaRef.value.scrollTop = draftTextareaRef.value.scrollHeight
@@ -242,6 +254,7 @@ watch(aiCompletion, (newVal) => {
 
 async function generateDraft() {
   if (draftState.value === 'generating') return
+  console.log('[EmailDetail] generateDraft() called')
 
   draftState.value = 'generating'
   generatedDraft.value = ''
@@ -251,22 +264,31 @@ async function generateDraft() {
   const context = rawBody.length > 4000 ? rawBody.slice(0, 4000) + '... (truncated)' : rawBody
 
   const prompt = instructionText.value.trim()
+  console.log('[EmailDetail] prompt:', JSON.stringify(prompt))
+  console.log('[EmailDetail] context length:', context.length)
+  console.log('[EmailDetail] model:', settings.value.ollamaModel)
 
   let systemPrompt = 'You are an expert email drafting assistant. You are replying to the provided email thread context. Draft a concise and professional reply. ONLY output the email body. No subject line needed.'
   if (settings.value.customInstructions) {
     systemPrompt += `\n\nUSER CUSTOM INSTRUCTIONS (MUST FOLLOW):\n${settings.value.customInstructions}`
   }
 
-  await completeAiDraft(prompt, {
-    headers: {
-      'x-ai-model': settings.value.ollamaModel
-    },
-    body: {
-      prompt,
-      system: systemPrompt,
-      context
-    }
-  })
+  try {
+    await completeAiDraft(prompt, {
+      headers: {
+        'x-ai-model': settings.value.ollamaModel
+      },
+      body: {
+        prompt,
+        system: systemPrompt,
+        context
+      }
+    })
+    console.log('[EmailDetail] completeAiDraft resolved successfully')
+  } catch (e) {
+    console.error('[EmailDetail] completeAiDraft threw:', e)
+    draftState.value = 'empty'
+  }
 }
 
 // Actions in drafted review state
