@@ -25,11 +25,10 @@ Integrated with the **Vercel AI SDK**, Bubbles.mail doesn't just show you emails
 
 ## ✨ Features
 
-- **Daily Intelligence Digest:** A beautiful, auto-generated morning briefing that groups your emails into actionable **Tasks**, critical **Deadlines**, and ongoing **Threads**.
-- **Bubbles.ai Assistant:** Chat directly with your inbox. Ask Bubbles.ai to summarize a long thread, find an old receipt, or draft a polite reply in seconds.
+- **Daily Intelligence Digest:** Auto-generated morning briefing that groups your emails into actionable **Tasks**, critical **Deadlines**, and ongoing **Threads**.
+- **Bubbles.ai Assistant:** Chat directly with your inbox. Ask Bubbles.ai to summarize a long thread, find an old receipt, or draft a reply in seconds.
 - **Smart Categorization:** Automatically categorizes emails into *Primary*, *Updates*, *Promotions*, *Social*, and *Forums* using native Gmail labels.
-- **Multi-Account Support:** Seamlessly connect and switch between multiple Gmail accounts.
-- **Gorgeous macOS UI:** A native-feeling, glassmorphic design featuring smooth animations, a unified sidebar, and deep macOS integration (including full-bleed squircle icons).
+- **Multi-Account Support:** Connect and switch between multiple Gmail accounts.
 - **Fast & Local:** Emails are synced and cached locally using SQLite for instant loading and offline access.
 - **On-Device AI Ready:** By leveraging tools like Ollama, Bubbles.mail can process your emails entirely on your machine. Keep your sensitive data strictly local while still enjoying the power of Large Language Models.
 
