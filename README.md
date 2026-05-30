@@ -31,6 +31,7 @@ Integrated with the **Vercel AI SDK**, Bubbles.mail doesn't just show you emails
 - **Multi-Account Support:** Seamlessly connect and switch between multiple Gmail accounts.
 - **Gorgeous macOS UI:** A native-feeling, glassmorphic design featuring smooth animations, a unified sidebar, and deep macOS integration (including full-bleed squircle icons).
 - **Fast & Local:** Emails are synced and cached locally using SQLite for instant loading and offline access.
+- **On-Device AI Ready:** By leveraging tools like Ollama, Bubbles.mail can process your emails entirely on your machine. Keep your sensitive data strictly local while still enjoying the power of Large Language Models.
 
 ## 🛠 Architecture & Tech Stack
 
@@ -119,7 +120,8 @@ The compiled binaries will be available in the `dist/` directory.
 
 Bubbles.mail respects your privacy. 
 - All emails are synced and stored **locally** on your machine in a SQLite database.
-- AI features are powered by secure API calls, and you have full control over what data is sent to the AI provider.
+- **100% Local AI:** For maximum security, you can configure Bubbles.mail to use local LLMs (via Ollama). This ensures your email data *never* leaves your machine for AI processing.
+- If using external AI providers, you have full control over what data is sent securely via their APIs.
 - We utilize standard OAuth 2.0 flows, meaning your Google password is never exposed or stored.
 
 ## 📄 License
