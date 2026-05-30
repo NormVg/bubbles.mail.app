@@ -36,6 +36,34 @@ Integrated with the **Vercel AI SDK**, Bubbles.mail doesn't just show you emails
 
 Bubbles.mail is built using web technologies packaged into a performant desktop application.
 
+```mermaid
+graph TD
+    subgraph Cloud
+        G[Gmail API]
+    end
+
+    subgraph Desktop App
+        UI[Vue 3 User Interface]
+        Main[Electron Main Process]
+        DB[(Local SQLite Cache)]
+        
+        UI <-->|IPC Router| Main
+        Main <-->|Read / Write| DB
+    end
+
+    subgraph Intelligence
+        AI[Vercel AI SDK]
+        Ollama[Ollama / External LLMs]
+        
+        Main -->|Send email data| AI
+        AI -->|Generate structured JSON| Ollama
+        Ollama -->|Stream responses| AI
+        AI -->|Tasks, Summaries, Chat| Main
+    end
+
+    G -->|OAuth2 Sync| Main
+```
+
 - **Framework:** [Electron](https://www.electronjs.org/) + [Vue 3](https://vuejs.org/) (Composition API)
 - **Language:** [TypeScript](https://www.typescriptlang.org/)
 - **Build Tool:** [Vite](https://vitejs.dev/) + [Electron-Builder](https://www.electron.build/)
