@@ -100,7 +100,7 @@ export const useMailStore = defineStore('mail', () => {
   const gmailAccountEmails = computed(() => gmailAccounts.value.map(account => account.email))
   const visibleAccounts = computed(() => gmailAccountEmails.value)
   const timelineDateKeys = computed(() => {
-    const buckets = new Map<string, { dateKey: string; count: number; sort: number }>()
+    const buckets = new Map<string, { dateKey: string; count: number; sort: number; label: string }>()
 
     emails.value
       .filter(email => !activeAccount.value || email.account === activeAccount.value)
@@ -112,7 +112,7 @@ export const useMailStore = defineStore('mail', () => {
           current.count += 1
           current.sort = Math.max(current.sort, sort)
         } else {
-          buckets.set(email.dateKey, { dateKey: email.dateKey, count: 1, sort })
+          buckets.set(email.dateKey, { dateKey: email.dateKey, count: 1, sort, label: '' })
         }
       })
 
@@ -121,6 +121,7 @@ export const useMailStore = defineStore('mail', () => {
       const bucket = buckets.get(item.dateKey)
       return {
         dateKey: item.dateKey,
+        label: item.label,
         count: bucket?.count || 0,
         sort: bucket?.sort || item.sort,
       }
@@ -411,10 +412,16 @@ export const useMailStore = defineStore('mail', () => {
       console.log('[Vue useMail] loadGmailMessages retrieved messages:', messages.length)
       const mapped = messages.map((message: GmailApiMessage) => mapGmailMessage(message))
 
-      emails.value = emails.value.filter(email => {
-        return email.gmailAccountId !== account.id
-      })
-      emails.value.unshift(...mapped)
+      const mappedMap = new Map(mapped.map(m => [m.id, m]))
+      for (let i = 0; i < emails.value.length; i++) {
+        const id = emails.value[i].id
+        if (emails.value[i].gmailAccountId === account.id && mappedMap.has(id)) {
+          emails.value[i] = mappedMap.get(id)!
+          mappedMap.delete(id)
+        }
+      }
+      emails.value.unshift(...Array.from(mappedMap.values()))
+      emails.value.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       console.log('[Vue useMail] loadGmailMessages: emails array updated. Size:', emails.value.length)
 
       gmailHasMore.value = true
@@ -596,7 +603,8 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   function getDateKey(timestamp: number | null) {
-    return formatTimelineDate(timestamp ? new Date(timestamp) : new Date())
+    const d = timestamp ? new Date(timestamp) : new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
   function getRecentTimelineDates(days: number) {
@@ -605,8 +613,11 @@ export const useMailStore = defineStore('mail', () => {
     return Array.from({ length: days }, (_, index) => {
       const date = new Date(today)
       date.setDate(today.getDate() - index)
+      const d = date
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       return {
-        dateKey: formatTimelineDate(date),
+        dateKey,
+        label: formatTimelineDate(date),
         sort: date.getTime()
       }
     })

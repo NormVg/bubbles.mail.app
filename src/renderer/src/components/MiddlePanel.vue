@@ -67,9 +67,17 @@ function nextMonth() {
 }
 
 function dateToKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatDateKeyDisplay(dateKey: string | null): string {
+  if (!dateKey) return ''
+  const parts = dateKey.split('-')
+  if (parts.length !== 3) return dateKey
+  const [y, m, d] = parts.map(Number)
+  const dc = new Date(y, m - 1, d)
   const td = new Date(); td.setHours(0,0,0,0)
   const yd = new Date(td); yd.setDate(yd.getDate() - 1)
-  const dc = new Date(d); dc.setHours(0,0,0,0)
   if (dc.getTime() === td.getTime()) return 'Today'
   if (dc.getTime() === yd.getTime()) return 'Yesterday'
   return new Intl.DateTimeFormat(undefined, {
@@ -183,7 +191,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
             title="Filter by date"
           >
             <CalendarDays :size="13" />
-            <span>{{ selectedDateKey || 'Filter by date' }}</span>
+            <span>{{ selectedDateKey ? formatDateKeyDisplay(selectedDateKey) : 'Filter by date' }}</span>
             <X v-if="selectedDateKey" :size="12" class="clear-x" @click.stop="clearDate" />
           </button>
 

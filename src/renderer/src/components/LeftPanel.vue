@@ -85,7 +85,7 @@ onMounted(() => {
   window.addEventListener('focus', handleWindowFocus)
 
   // Bootstrap the timeline selection on startup
-  setSelectedDateKey(selectedDateKey.value || 'Today')
+  setSelectedDateKey(selectedDateKey.value)
 })
 
 onUnmounted(() => {
@@ -119,17 +119,17 @@ onUnmounted(() => {
             @click="setSelectedDateKey(item.dateKey)"
           >
             <div class="nav-item-left">
-              <Clock v-if="item.dateKey === 'Yesterday'" :size="15" class="nav-icon" />
-              <ChevronLeft v-else-if="item.dateKey !== 'Today'" :size="15" class="nav-icon date-chevron" />
+              <Clock v-if="item.label === 'Yesterday'" :size="15" class="nav-icon" />
+              <ChevronLeft v-else-if="item.label !== 'Today'" :size="15" class="nav-icon date-chevron" />
               <CalendarDays v-else :size="15" class="nav-icon" />
-              <span :class="{ 'past-date-label': item.dateKey !== 'Today' && item.dateKey !== 'Yesterday' }">
-                {{ item.dateKey }}
+              <span :class="{ 'past-date-label': item.label !== 'Today' && item.label !== 'Yesterday' }">
+                {{ item.label }}
               </span>
             </div>
             <span
               v-if="item.count > 0"
               class="timeline-badge"
-              :class="{ 'muted-badge': item.dateKey !== 'Today' }"
+              :class="{ 'muted-badge': item.label !== 'Today' }"
             >
               {{ item.count }}
             </span>

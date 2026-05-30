@@ -40,7 +40,9 @@ import { defineStore, storeToRefs } from 'pinia'
 
 export const useDigestStore = defineStore('dailyDigest', () => {
   const dailyReports = ref<DailyReport[]>([])
-  const selectedDateKey = ref<string>('Today')
+  const d = new Date()
+  const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const selectedDateKey = ref<string>(todayKey)
   const selectedReport = computed(() => {
     return dailyReports.value.find(report => report.dateKey === selectedDateKey.value) || null
   })
