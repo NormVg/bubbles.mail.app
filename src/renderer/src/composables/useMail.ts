@@ -469,11 +469,9 @@ export const useMailStore = defineStore('mail', () => {
 
       // 2. If no older messages exist locally, fetch them from the Gmail API!
       if (nextMessages.length === 0) {
-        const date = new Date(oldestMessage.timestamp)
-        const yyyy = date.getFullYear()
-        const mm = String(date.getMonth() + 1).padStart(2, '0')
-        const dd = String(date.getDate()).padStart(2, '0')
-        const beforeQuery = `before:${yyyy}/${mm}/${dd}`
+        // Use epoch timestamp in seconds for precise filtering
+        const epochSeconds = Math.floor(oldestMessage.timestamp / 1000)
+        const beforeQuery = `before:${epochSeconds}`
 
         console.log('[Vue useMail] loadMoreGmailMessages fetching older messages from Gmail API with query:', beforeQuery)
         
@@ -496,11 +494,12 @@ export const useMailStore = defineStore('mail', () => {
           }
         })
         console.log('[Vue useMail] loadMoreGmailMessages after sync retrieved messages:', nextMessages.length)
-      }
-
-      if (nextMessages.length === 0) {
-        gmailHasMore.value = false
-        return
+        
+        // If after sync we STILL have no messages, we've reached the end of the inbox
+        if (nextMessages.length === 0) {
+          gmailHasMore.value = false
+          return
+        }
       }
 
       const mapped = nextMessages.map((message: GmailApiMessage) => mapGmailMessage(message))
@@ -508,18 +507,10 @@ export const useMailStore = defineStore('mail', () => {
       const existingIds = new Set(emails.value.map(e => e.id))
       const uniqueNew = mapped.filter(e => !existingIds.has(e.id))
 
-      if (uniqueNew.length === 0) {
-        gmailHasMore.value = false
-        return
-      }
-
-      emails.value.push(...uniqueNew)
-      
-      // Sort desc by timestamp
-      emails.value.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-
-      if (nextMessages.length < 30) {
-        gmailHasMore.value = false
+      if (uniqueNew.length > 0) {
+        emails.value.push(...uniqueNew)
+        // Sort desc by timestamp
+        emails.value.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       }
     } catch (error) {
       console.error('[Vue useMail] loadMoreGmailMessages error:', error)
